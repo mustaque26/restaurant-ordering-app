@@ -40,7 +40,21 @@ export default function CartPanel({ qrImageUrl }) {
 
       const response = await api.post('/orders', payload)
       clearCart()
-      navigate(`/order-success/${response.data.id}`)
+      // Backend may return { orderId: <number> } or { id: <number> } or just Location header
+      const data = response?.data || {}
+      let orderId = data.orderId ?? data.id
+      if (!orderId) {
+        const loc = response?.headers?.location || response?.headers?.Location
+        if (loc) {
+          orderId = loc.split('/').pop()
+        }
+      }
+
+      if (orderId) {
+        navigate(`/order-success/${orderId}`)
+      } else {
+        setError('Order placed but server did not return an order id.')
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'Unable to place order')
     } finally {
