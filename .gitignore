@@ -1,14 +1,31 @@
 # Java / Maven
-target/
+/target/
+**/target/
 *.class
 *.jar
 *.war
-# IntelliJ
-.idea/
+*.ear
+*.log
+*.lst
+
+# IDEs
+/.idea/
 *.iml
-# Node
-node_modules/
-dist/
+
+# Node / frontend
+/node_modules/
+/frontend/node_modules/
+/dist/
+/frontend/dist/
+
 # OS
 .DS_Store
-EOF
+
+# Env
+.env
+
+# Misc
+build/
+out/
+coverage/
+
