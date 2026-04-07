@@ -33,8 +33,26 @@ public class OrderController {
             return ResponseEntity.internalServerError().build();
         }
         // Send confirmation email
-        String subject = "Order Confirmation - Mustalam Restaurant";
-        String body = "Thank you for your order, " + saved.getCustomerName() + "!\nYour order ID is: " + saved.getId();
+        String subject = "Order Confirmation - Franzzo Restaurant";
+        StringBuilder itemsList = new StringBuilder();
+        if (saved.getItems() != null && !saved.getItems().isEmpty()) {
+            for (var item : saved.getItems()) {
+                itemsList.append("- ")
+                        .append(item.getItemName())
+                        .append(" x")
+                        .append(item.getQuantity())
+                        .append(" @ ₹")
+                        .append(item.getPrice())
+                        .append(" = ₹")
+                        .append(item.getLineTotal())
+                        .append("\n");
+            }
+        }
+        String total = saved.getTotalAmount() != null ? saved.getTotalAmount().toString() : "0.00";
+        String body = "Thank you for your order, " + saved.getCustomerName() + "!\n" +
+                "Your order ID is: " + saved.getId() + "\n" +
+                (itemsList.length() > 0 ? ("\nItems Ordered:\n" + itemsList) : "") +
+                "Total: ₹" + total + "\n";
         emailService.sendOrderConfirmation(saved.getEmail(), subject, body);
         var location = uriBuilder.path("/api/orders/{id}").buildAndExpand(saved.getId()).toUri();
         return ResponseEntity.created(location).body(new OrderResponse(saved.getId()));
