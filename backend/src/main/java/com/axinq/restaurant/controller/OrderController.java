@@ -3,9 +3,11 @@ package com.axinq.restaurant.controller;
 import com.axinq.restaurant.dto.CreateOrderRequest;
 import com.axinq.restaurant.dto.OrderResponse;
 import com.axinq.restaurant.model.Order;
+import com.axinq.restaurant.service.EmailService;
 import com.axinq.restaurant.service.OrderService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -15,9 +17,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class OrderController {
 
     private final OrderService orderService;
+    private final EmailService emailService;
 
-    public OrderController(OrderService orderService) {
+    @Autowired
+    public OrderController(OrderService orderService, EmailService emailService) {
         this.orderService = orderService;
+        this.emailService = emailService;
     }
 
     @PostMapping
@@ -27,6 +32,10 @@ public class OrderController {
         if (saved == null || saved.getId() == null) {
             return ResponseEntity.internalServerError().build();
         }
+        // Send confirmation email
+        String subject = "Order Confirmation - Mustalam Restaurant";
+        String body = "Thank you for your order, " + saved.getCustomerName() + "!\nYour order ID is: " + saved.getId();
+        emailService.sendOrderConfirmation(saved.getEmail(), subject, body);
         var location = uriBuilder.path("/api/orders/{id}").buildAndExpand(saved.getId()).toUri();
         return ResponseEntity.created(location).body(new OrderResponse(saved.getId()));
     }

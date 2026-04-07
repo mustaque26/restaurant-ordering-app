@@ -10,6 +10,7 @@ export default function CartPanel({ qrImageUrl }) {
   const [customerName, setCustomerName] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [email, setEmail] = useState('') // Added email state
   const [paymentReference, setPaymentReference] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -30,6 +31,7 @@ export default function CartPanel({ qrImageUrl }) {
       const payload = {
         customerName,
         phoneNumber,
+        email, // Include email in payload
         deliveryAddress,
         paymentReference,
         items: items.map((item) => ({
@@ -40,7 +42,6 @@ export default function CartPanel({ qrImageUrl }) {
 
       const response = await api.post('/orders', payload)
       clearCart()
-      // Backend may return { orderId: <number> } or { id: <number> } or just Location header
       const data = response?.data || {}
       let orderId = data.orderId ?? data.id
       if (!orderId) {
@@ -92,6 +93,7 @@ export default function CartPanel({ qrImageUrl }) {
         <h3>Delivery Details</h3>
         <input placeholder="Customer Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
         <input placeholder="Phone Number" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+        <input placeholder="Email ID" value={email} onChange={(e) => setEmail(e.target.value)} /> {/* Email input */}
         <textarea placeholder="Delivery Address" value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} rows="3" />
       </div>
 

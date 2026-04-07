@@ -31,6 +31,7 @@ public class OrderService {
         order.setPhoneNumber(request.phoneNumber());
         order.setDeliveryAddress(request.deliveryAddress());
         order.setPaymentReference(request.paymentReference());
+        order.setEmail(request.email());
         order.setStatus(request.paymentReference() == null || request.paymentReference().isBlank()
                 ? OrderStatus.PAYMENT_PENDING
                 : OrderStatus.PAYMENT_SUBMITTED);
