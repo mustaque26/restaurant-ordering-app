@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../api'
+import QrSvg from '../components/QrSvg'
 
 const emptyForm = {
   name: '',
@@ -71,7 +72,11 @@ export default function AdminPage() {
           <h2>Payment QR Settings</h2>
           <input value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} placeholder="QR image URL" />
           <button onClick={updateQr}>Update QR</button>
-          {qrUrl && <img src={qrUrl} alt="QR preview" className="qr-image" />}
+          {qrUrl ? (
+            <img src={qrUrl} alt="QR preview" className="qr-image" />
+          ) : (
+            <QrSvg className="qr-image" />
+          )}
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 import { useCart } from '../context/CartContext'
+import QrSvg from './QrSvg'
 
 export default function CartPanel({ qrImageUrl }) {
   const { items, updateQuantity, clearCart, total } = useCart()
@@ -99,7 +100,11 @@ export default function CartPanel({ qrImageUrl }) {
 
       <div className="form-section">
         <h3>Pay by QR Code</h3>
-        <img className="qr-image" src={qrImageUrl} alt="Payment QR" />
+        {qrImageUrl ? (
+          <img className="qr-image" src={qrImageUrl} alt="Payment QR" />
+        ) : (
+          <QrSvg className="qr-image" />
+        )}
         <input
           placeholder="Payment Reference / UTR Number"
           value={paymentReference}
