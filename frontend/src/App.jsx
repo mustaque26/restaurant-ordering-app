@@ -3,6 +3,7 @@ import MenuPage from './pages/MenuPage'
 import AdminPage from './pages/AdminPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
 import { CartProvider } from './context/CartContext'
+import SubscriptionPage from './pages/SubscriptionPage'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
             <h1>Franzzo</h1>
             <nav>
               <Link to="/">Menu</Link>
+              <Link to="/subscriptions">Subscription</Link>
               <Link to="/admin">Admin</Link>
             </nav>
           </div>
@@ -21,6 +23,7 @@ export default function App() {
         <main className="container">
           <Routes>
             <Route path="/" element={<MenuPage />} />
+            <Route path="/subscriptions" element={<SubscriptionPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/order-success/:id" element={<OrderSuccessPage />} />
           </Routes>

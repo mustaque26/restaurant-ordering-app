@@ -102,6 +102,43 @@ export function isValidEmail(email: string) {
   return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+export function isValidPhone(phone?: string) {
+  if (!phone || typeof phone !== 'string') return false;
+  // very simple validation: at least 7 digits, allow + and spaces and dashes
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+}
+
+export function normalizePhone(phone: string) {
+  return phone.replace(/\D/g, '');
+}
+
+export function buildWhatsappUrl(order: Order, toPhone?: string) {
+  // Determine recipient phone: explicit arg -> order.deliveryDetails.phone -> env fallback
+  const recipient = toPhone || order.deliveryDetails?.phone || process.env.WHATSAPP_TO;
+  if (!recipient) {
+    throw new Error('No recipient phone provided. Supply toPhone or order.deliveryDetails.phone or set WHATSAPP_TO env var.');
+  }
+  const phone = normalizePhone(recipient);
+  if (!isValidPhone(phone)) {
+    throw new Error('Invalid phone number provided for WhatsApp');
+  }
+
+  const text = buildOrderText(order);
+  const encoded = encodeURIComponent(text);
+  // Use wa.me (Click to Chat). Phone must be in international format without plus sign.
+  return `https://wa.me/${phone}?text=${encoded}`;
+}
+
+export function sendOrderWhatsapp(order: Order, toPhone?: string) {
+  const url = buildWhatsappUrl(order, toPhone);
+  // If running in a browser environment, open a new window/tab
+  if (typeof window !== 'undefined' && window?.open) {
+    window.open(url, '_blank');
+  }
+  return url;
+}
+
 export async function sendOrderEmail(order: Order, toEmail?: string) {
   // Environment variables: MAIL_USER, MAIL_PASS. Fallback sender is franzzo057@gmail.com
   const user = process.env.MAIL_USER || 'franzzo057@gmail.com';

@@ -7,9 +7,11 @@ import java.util.List;
 
 public record CreateOrderRequest(
         @NotBlank String customerName,
-        @NotBlank String phoneNumber,
+        String phoneNumber,
         @NotBlank String deliveryAddress,
         String paymentReference,
         @Valid @NotEmpty List<OrderItemRequest> items,
-        @NotBlank String email
+        String email,
+        boolean sendEmail,
+        boolean sendWhatsapp
 ) {}
