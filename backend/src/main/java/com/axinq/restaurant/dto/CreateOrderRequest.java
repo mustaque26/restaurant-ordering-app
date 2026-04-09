@@ -13,5 +13,6 @@ public record CreateOrderRequest(
         @Valid @NotEmpty List<OrderItemRequest> items,
         String email,
         boolean sendEmail,
-        boolean sendWhatsapp
+        boolean sendWhatsapp,
+        Long tenantId
 ) {}

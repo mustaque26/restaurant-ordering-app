@@ -15,7 +15,7 @@ import org.springframework.http.HttpStatus;
 @Service
 public class AdminAuthService {
 
-    private final EmailService emailService;
+    private final SystemEmailService systemEmailService;
 
     // OTP storage and token storage kept in-memory for simplicity
     private final Map<String, OtpEntry> otpStore = new ConcurrentHashMap<>();
@@ -26,8 +26,8 @@ public class AdminAuthService {
     private String adminEmail;
 
     @Autowired
-    public AdminAuthService(EmailService emailService) {
-        this.emailService = emailService;
+    public AdminAuthService(SystemEmailService systemEmailService) {
+        this.systemEmailService = systemEmailService;
     }
 
     public void sendOtp(String email) {
@@ -47,7 +47,7 @@ public class AdminAuthService {
 
         String subject = "Your admin login OTP";
         String body = "Your OTP for admin login is: " + otp + "\nThis code will expire in 5 minutes.";
-        emailService.sendOrderConfirmation(email, subject, body);
+        systemEmailService.sendFromFranzzo(email, subject, body);
     }
 
     public String verifyOtp(String email, String otp) {

@@ -3,7 +3,8 @@ package com.axinq.restaurant.controller;
 import com.axinq.restaurant.dto.CreateOrderRequest;
 import com.axinq.restaurant.dto.OrderResponse;
 import com.axinq.restaurant.model.Order;
-import com.axinq.restaurant.service.EmailService;
+import com.axinq.restaurant.service.SystemEmailService;
+import com.axinq.restaurant.service.TenantEmailService;
 import com.axinq.restaurant.service.OrderService;
 import com.axinq.restaurant.service.WhatsappQueueService;
 import jakarta.validation.Valid;
@@ -13,20 +14,26 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
+import com.axinq.restaurant.repository.TenantRepository;
+import com.axinq.restaurant.model.Tenant;
 
 @RestController
 @RequestMapping("/api/orders")
 public class OrderController {
 
     private final OrderService orderService;
-    private final EmailService emailService;
+    private final SystemEmailService systemEmailService;
+    private final TenantEmailService tenantEmailService;
     private final WhatsappQueueService whatsappQueue;
+    private final TenantRepository tenantRepository;
 
     @Autowired
-    public OrderController(OrderService orderService, EmailService emailService, WhatsappQueueService whatsappQueue) {
+    public OrderController(OrderService orderService, SystemEmailService systemEmailService, TenantEmailService tenantEmailService, WhatsappQueueService whatsappQueue, TenantRepository tenantRepository) {
         this.orderService = orderService;
-        this.emailService = emailService;
+        this.systemEmailService = systemEmailService;
+        this.tenantEmailService = tenantEmailService;
         this.whatsappQueue = whatsappQueue;
+        this.tenantRepository = tenantRepository;
     }
 
     @PostMapping
@@ -71,7 +78,21 @@ public class OrderController {
         // Send via selected channels (best-effort)
         if (request.sendEmail()) {
             try {
-                emailService.sendOrderConfirmation(request.email(), "Order Confirmation - Franzzo Restaurant", body);
+                boolean sent = false;
+                if (request.tenantId() != null) {
+                    Tenant t = tenantRepository.findById(request.tenantId()).orElse(null);
+                    if (t != null && t.isOnboarded() && t.getAdminEmail() != null && !t.getAdminEmail().isBlank()) {
+                        try {
+                            tenantEmailService.sendFromTenantAddress(t.getAdminEmail(), request.email(), "Order Confirmation - " + (t.getName() != null ? t.getName() : "Your Restaurant"), body);
+                            sent = true;
+                        } catch (Exception ex) {
+                            sent = false;
+                        }
+                    }
+                }
+                if (!sent) {
+                    systemEmailService.sendFromFranzzo(request.email(), "Order Confirmation - Franzzo Restaurant", body);
+                }
             } catch (Exception ex) {
                 // log and continue
             }

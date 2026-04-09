@@ -4,6 +4,7 @@ import AdminPage from './pages/AdminPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
 import { CartProvider } from './context/CartContext'
 import SubscriptionPage from './pages/SubscriptionPage'
+import TenantSettings from './pages/TenantSettings'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<MenuPage />} />
             <Route path="/subscriptions" element={<SubscriptionPage />} />
+            <Route path="/tenant/:id/settings" element={<TenantSettings />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/order-success/:id" element={<OrderSuccessPage />} />
           </Routes>
