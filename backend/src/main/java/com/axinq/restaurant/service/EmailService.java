@@ -14,19 +14,19 @@ import org.slf4j.LoggerFactory;
 public class EmailService {
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
-    private final JavaMailSender franzzoSender;
+    private final JavaMailSender dizminuSender;
     private final JavaMailSender salesSender;
 
-    @Value("${spring.mail.franzzo.username:franzzo057@gmail.com}")
-    private String franzzoFrom;
+    @Value("${spring.mail.dizminu.username:dizminu057@gmail.com}")
+    private String dizminuFrom;
 
     @Value("${spring.mail.sales.username:consulting@axinq.com}")
     private String salesFrom;
 
     @Autowired
-    public EmailService(@Qualifier("franzzoMailSender") JavaMailSender franzzoSender,
+    public EmailService(@Qualifier("dizminuMailSender") JavaMailSender dizminuSender,
                         @Qualifier("salesMailSender") JavaMailSender salesSender) {
-        this.franzzoSender = franzzoSender;
+        this.dizminuSender = dizminuSender;
         this.salesSender = salesSender;
     }
 
@@ -49,9 +49,9 @@ public class EmailService {
         }
     }
 
-    // For order confirmations or OTP -> use franzzo sender
-    public void sendFromFranzzo(String toEmail, String subject, String body) {
-        send(franzzoSender, franzzoFrom, toEmail, subject, body);
+    // For order confirmations or OTP -> use dizminu sender
+    public void sendFromDizminu(String toEmail, String subject, String body) {
+        send(dizminuSender, dizminuFrom, toEmail, subject, body);
     }
 
     // For tenant onboarding or sales notifications -> use sales sender

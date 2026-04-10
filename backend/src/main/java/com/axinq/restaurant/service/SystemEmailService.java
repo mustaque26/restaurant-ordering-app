@@ -20,18 +20,18 @@ import jakarta.mail.internet.MimeMessage;
 public class SystemEmailService {
     private static final Logger log = LoggerFactory.getLogger(SystemEmailService.class);
 
-    private final JavaMailSender franzzoSender;
+    private final JavaMailSender dizminuSender;
     private final JavaMailSender salesSender;
 
-    @Value("${spring.mail.franzzo.username:franzzo057@gmail.com}")
-    private String franzzoFrom;
+    @Value("${spring.mail.dizminu.username:dizminu057@gmail.com}")
+    private String dizminuFrom;
 
     @Value("${spring.mail.sales.username:consulting@axinq.com}")
     private String salesFrom;
 
-    public SystemEmailService(@Qualifier("franzzoMailSender") JavaMailSender franzzoSender,
+    public SystemEmailService(@Qualifier("dizminuMailSender") JavaMailSender dizminuSender,
                               @Qualifier("salesMailSender") JavaMailSender salesSender) {
-        this.franzzoSender = franzzoSender;
+        this.dizminuSender = dizminuSender;
         this.salesSender = salesSender;
     }
 
@@ -79,11 +79,22 @@ public class SystemEmailService {
             // set HTML body
             helper.setText(htmlBody, true);
 
-            // try to attach inline logo from classpath (src/main/resources/static/images/axinq-logo.png)
+            // try to attach inline logo from classpath (prefer dizminuLogo/dizminu-logo, fallback to axinq-logo)
             try {
-                ClassPathResource logo = new ClassPathResource("static/images/axinq-logo.png");
+                ClassPathResource logo = new ClassPathResource("static/images/dizminuLogo.png");
+                if (!logo.exists()) {
+                    logo = new ClassPathResource("static/images/dizminu-logo.png");
+                }
+                if (!logo.exists()) {
+                    logo = new ClassPathResource("static/images/axinq-logo.png");
+                }
                 if (logo.exists()) {
-                    helper.addInline("axinqLogo", logo);
+                    // attach with cid 'dizminuLogo' for new branding, keep old cid available if templates still use it
+                    helper.addInline("dizminuLogo", logo);
+                    // also add legacy cid for backward compatibility
+                    try {
+                        helper.addInline("axinqLogo", logo);
+                    } catch (Exception ignore) {}
                 }
             } catch (Exception e) {
                 log.debug("Logo not found or failed to attach inline", e);
@@ -104,8 +115,8 @@ public class SystemEmailService {
         }
     }
 
-    public void sendFromFranzzo(String toEmail, String subject, String body) {
-        sendText(franzzoSender, franzzoFrom, toEmail, subject, body);
+    public void sendFromDizminu(String toEmail, String subject, String body) {
+        sendText(dizminuSender, dizminuFrom, toEmail, subject, body);
     }
 
     public void sendFromSales(String toEmail, String subject, String body) {

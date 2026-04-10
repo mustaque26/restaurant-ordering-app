@@ -47,7 +47,7 @@ public class AdminAuthService {
 
         String subject = "Your admin login OTP";
         String body = "Your OTP for admin login is: " + otp + "\nThis code will expire in 5 minutes.";
-        systemEmailService.sendFromFranzzo(email, subject, body);
+        systemEmailService.sendFromDizminu(email, subject, body);
     }
 
     public String verifyOtp(String email, String otp) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../api'
 import QrSvg from '../components/QrSvg'
+import { setToken as saveToken, clearToken as removeToken, getToken } from '../tenantAuth'
 
 const emptyForm = {
   name: '',
@@ -18,12 +19,21 @@ export default function AdminPage() {
 
   // new state for auth
   const [email, setEmail] = useState('')
+  const [restaurantName, setRestaurantName] = useState('')
   const [otp, setOtp] = useState('')
   const [step, setStep] = useState(0) // 0 = not logged in, 1 = otp sent, 2 = logged in
-  const [token, setToken] = useState(localStorage.getItem('admin_token') || '')
+  const [token, setToken] = useState(getToken())
+
   const [message, setMessage] = useState('')
+  const [tenant, setTenant] = useState(null)
 
   const authHeaders = () => ({ headers: { Authorization: token ? `Bearer ${token}` : '' } })
+
+  useEffect(() => {
+    const h = () => setToken(getToken())
+    window.addEventListener('tenant-auth-changed', h)
+    return () => window.removeEventListener('tenant-auth-changed', h)
+  }, [])
 
   const load = async () => {
     const [itemsRes, settingsRes] = await Promise.all([
@@ -37,6 +47,14 @@ export default function AdminPage() {
   useEffect(() => {
     if (token) {
       setStep(2)
+      // fetch tenant details
+      api.get('/tenant-auth/me', authHeaders()).then(res => setTenant(res.data)).catch(() => {
+        setTenant(null)
+        // token invalid -> clear
+        setToken('')
+        removeToken()
+        setStep(0)
+      })
     }
     load()
   }, [token])
@@ -80,7 +98,7 @@ export default function AdminPage() {
     try {
       await api.post('/admin/send-otp', { email })
       setStep(1)
-      setMessage('OTP sent to your email')
+      setMessage(`OTP sent to ${email}. Please check your inbox or spam and enter the 6-digit code here.`)
     } catch (err) {
       // show backend message if available
       setMessage(err?.response?.data?.message || 'Failed to send OTP')
@@ -93,9 +111,9 @@ export default function AdminPage() {
       const res = await api.post('/admin/verify-otp', { email, otp })
       const t = res.data.token
       setToken(t)
-      localStorage.setItem('admin_token', t)
+      saveToken(t)
       setStep(2)
-      setMessage('Logged in')
+      setMessage('Logged in successfully — redirecting to the admin dashboard...')
     } catch (err) {
       setMessage(err?.response?.data?.message || 'Failed to verify OTP')
     }
@@ -103,7 +121,7 @@ export default function AdminPage() {
 
   const logout = () => {
     setToken('')
-    localStorage.removeItem('admin_token')
+    removeToken()
     setStep(0)
     setMessage('Logged out')
   }
@@ -112,13 +130,14 @@ export default function AdminPage() {
     <div className="admin-page">
       {/* Auth panel */}
       <div className="card pad mb">
-        <h2>Admin Login</h2>
+        <h2>Tenant Login</h2>
         {message && <div className="message">{message}</div>}
         {step !== 2 ? (
           <div className="form-grid">
-            <input placeholder="Admin email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input placeholder="Tenant admin email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input placeholder="Restaurant name" value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} />
             {step === 1 && (
-              <input placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
+              <input placeholder="Enter 6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
             )}
             {step === 0 ? (
               <button onClick={sendOtp}>Send OTP</button>
@@ -128,7 +147,7 @@ export default function AdminPage() {
           </div>
         ) : (
           <div>
-            <div>Logged in as {email}</div>
+            <div>Logged in as {email} {tenant?.name ? `- ${tenant.name}` : ''}</div>
             <button onClick={logout}>Logout</button>
           </div>
         )}
@@ -198,7 +217,7 @@ export default function AdminPage() {
         </>
       ) : (
         <div className="card pad">
-          <p>Please login with the admin email to access admin features.</p>
+          <p>Please login with the tenant admin email and restaurant name to access tenant features.</p>
         </div>
       )}
     </div>

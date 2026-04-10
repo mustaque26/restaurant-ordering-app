@@ -1,6 +1,8 @@
 :root {
-  --primary: #111827;
-  --accent: #f59e0b;
+  --primary: #071027; /* deep navy similar to background in attachment */
+  --accent-start: #0ea5e9; /* bright blue */
+  --accent-end: #28c76f; /* green */
+  --accent: linear-gradient(90deg, var(--accent-start), var(--accent-end));
   --border: #e5e7eb;
   --card: #ffffff;
 }
@@ -14,6 +16,40 @@
 .topbar {
   background: var(--primary);
   color: white;
+  box-shadow: 0 2px 10px rgba(2,6,23,0.6);
+}
+
+/* dedicated topbar container flush to viewport left */
+.topbar-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px; /* small vertical and horizontal padding */
+  box-sizing: border-box;
+}
+
+.topbar .container.nav {
+  max-width: none; /* allow full-width topbar */
+  width: 100%;
+  padding-left: 0 !important; /* flush to left edge */
+  padding-right: 12px; /* small safe offset from right */
+}
+
+/* ensure brand block is left aligned */
+.topbar-container .brand { margin-left: 0; }
+
+/* logo styling */
+.logo {
+  height: 56px; /* increased from 42px */
+  object-fit: contain;
+  margin-right: 12px;
+}
+
+@media (max-width: 640px) {
+  .logo {
+    height: 36px; /* smaller on mobile */
+  }
 }
 
 .nav {
@@ -23,9 +59,14 @@
 }
 
 .nav a {
-  color: white;
+  color: rgba(255,255,255,0.92);
   text-decoration: none;
   margin-left: 16px;
+}
+
+.nav a:hover {
+  color: #e6f9ff;
+  text-decoration: underline;
 }
 
 .layout {
@@ -44,7 +85,7 @@
 
 .card {
   background: var(--card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(15,23,42,0.04);
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 8px 20px rgba(0,0,0,0.04);
@@ -73,24 +114,27 @@
 }
 
 .pill {
-  background: #fff3d6;
-  color: #8a5a00;
+  background: rgba(255,255,255,0.06);
+  color: #d1f5ff;
   padding: 5px 10px;
   border-radius: 999px;
   font-size: 12px;
 }
 
 button {
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+  color: white;
   border: none;
   padding: 10px 14px;
   border-radius: 10px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgba(16,24,40,0.3);
 }
 
 button:hover {
-  opacity: 0.92;
+  opacity: 0.96;
+  transform: translateY(-1px);
 }
 
 .cart {
@@ -276,7 +320,7 @@ input, textarea, select {
 .col-price { color: #374151; font-weight: 700 }
 .price-summary { margin-top: 16px; font-size: 18px }
 .subscribe-btn { margin-top: 10px; padding: 10px 18px; border-radius: 10px; background: #0ea5a4; color: white; border: none }
-.subscribe-btn.primary { background: #0f172a }
+.subscribe-btn.primary { background: linear-gradient(90deg, var(--accent-start), var(--accent-end)); color: white; }
 .subscribe-message { margin-top: 16px; padding: 12px; border-radius:8px; background:#f0fdf4; color:#065f46 }
 .extra-note {
   padding: 10px 0;
@@ -289,4 +333,128 @@ input, textarea, select {
 .page-title { font-size: 28px; font-weight: 800; margin-bottom: 6px }
 .muted { color: #6b7280; margin-bottom: 12px }
 
-@media (max-width: 960px) { .subscription-grid { grid-template-columns: 1fr } }
+/* brand: icon + text */
+.brand {
+  display: flex;
+  /* stretch children so both .brand-image and .brand-wordmark share the same top/bottom edges */
+  align-items: stretch;
+  gap: 18px;
+  margin-left: 0;
+}
+
+.brand-image {
+  width: 84px;
+  height: 84px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 0; /* remove inner left padding */
+  padding-right: 6px; /* keep small right padding to separate icon from text */
+}
+
+.brand-wordmark {
+  /* match the logo block height so top and bottom align exactly with the logo */
+  height: 84px; /* same as .brand-image */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* put SVG at top and tagline at bottom */
+  align-items: flex-start;
+}
+
+.brand-svg {
+  margin: 0; /* remove extra bottom gap; spacing handled by flex space-between */
+}
+
+/* ensure the SVG scales to fit within the wordmark block */
+.brand-svg svg {
+  max-height: 56px; /* leave room for tagline at bottom */
+  width: auto;
+  display: block;
+}
+
+.brand-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* crop so the icon fills the square and any embedded text is hidden */
+  object-position: center top;
+}
+
+.brand-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-left: 0;
+}
+
+/* Updated brand text to match attached design: larger, upright, smooth gradient and subtle bevel */
+.brand-text {
+  font-family: 'Poppins', sans-serif;
+  font-size: 48px; /* large, like the reference */
+  font-weight: 900;
+  font-style: normal; /* upright (not italic) */
+  color: transparent;
+  /* designed gradient similar to the reference (deep blue -> mid blue -> green) */
+  background: linear-gradient(90deg, #0b61d0 0%, #0ea5e9 28%, #1fb36a 65%, #28c76f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* refined bevel: multiple layered shadows to mimic embossed edges */
+  text-shadow: 0 1px 0 rgba(255,255,255,0.14),
+               0 2px 0 rgba(255,255,255,0.06) inset,
+               0 4px 18px rgba(2,6,23,0.5);
+  transform: none; /* remove skew */
+  display: inline-block;
+  line-height: 1;
+  letter-spacing: -1px;
+  margin-right: 6px;
+}
+
+.brand-tagline {
+  color: #ffffff; /* pure white for strong contrast */
+  font-weight: 700; /* bold */
+  font-size: 13px; /* slightly larger for readability */
+  margin: 0; /* remove extra top margin so flex space places it at bottom */
+  padding-bottom: 6px; /* small padding to line up with logo bottom edge */
+  max-width: 240px;
+  text-align: left;
+  line-height: 1.12;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.35); /* subtle lift for legibility on dark bg */
+}
+
+.brand-tagline .tag-line-1 {
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.brand-tagline .tag-line-2 {
+  font-weight: 700;
+  font-size: 13px;
+  opacity: 0.98;
+}
+
+@media (max-width: 960px) {
+  .brand-svg svg { height: 56px; }
+  /* match wordmark height to the smaller logo on medium screens */
+  .brand-wordmark { height: 56px; }
+}
+
+@media (max-width: 640px) {
+  .brand-svg svg { height: 32px; }
+  /* match wordmark height to mobile logo size */
+  .brand-wordmark { height: 40px; }
+}
+
+@media (max-width: 960px) {
+  .brand-text { font-size: 34px; }
+  .brand-image { width: 56px; height: 56px; }
+}
+
+@media (max-width: 640px) {
+  .topbar .container.nav { padding-left: 8px; }
+  .brand-image { width: 40px; height: 40px; padding: 4px; }
+  .brand-text { font-size: 22px; }
+  .brand-tagline { font-size: 10px; max-width: 120px }
+}

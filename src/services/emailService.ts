@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import path from 'path';
 
 export interface OrderItem {
   name: string;
@@ -42,6 +43,15 @@ function buildOrderHtml(order: Order) {
 
   return `
     <div style="font-family:Arial,sans-serif;color:#333">
+      <div style="width:56px;height:auto;overflow:visible;border-radius:8px;background:#ffffff;padding:6px;margin-bottom:12px;text-align:center;">
+        <div style="width:56px;height:56px;overflow:hidden;border-radius:8px;margin:0 auto;">
+          <img src="cid:dizminuLogo" alt="Dizminu" style="width:100%;height:100%;object-fit:cover;object-position:center top;display:block;"/>
+        </div>
+        <div style="color:#000000;font-size:11px;margin-top:6px;max-width:120px;text-align:center;line-height:1.1;">
+          <div style="font-weight:700">Axinq Technology</div>
+          <div style="font-weight:600">for Smarter Dining</div>
+        </div>
+      </div>
       <h2>Thank you for your order, ${order.customerName}!</h2>
       <p>Order ID: <strong>${order.id}</strong></p>
 
@@ -140,10 +150,10 @@ export function sendOrderWhatsapp(order: Order, toPhone?: string) {
 }
 
 export async function sendOrderEmail(order: Order, toEmail?: string) {
-  // Environment variables: MAIL_USER, MAIL_PASS. Fallback sender is franzzo057@gmail.com
-  const user = process.env.MAIL_USER || 'franzzo057@gmail.com';
+  // Environment variables: MAIL_USER, MAIL_PASS. Fallback sender is dizminu057@gmail.com (dizminu system account)
+  const user = process.env.MAIL_USER || 'dizminu057@gmail.com';
   const pass = process.env.MAIL_PASS || ''; // instruct to set an app password or OAuth token
-  const from = process.env.MAIL_FROM || 'franzzo057@gmail.com';
+  const from = process.env.MAIL_FROM || 'dizminu057@gmail.com';
 
   if (!pass) {
     throw new Error('MAIL_PASS is not set. Provide an app password or OAuth2 credentials in MAIL_PASS.');
@@ -169,12 +179,22 @@ export async function sendOrderEmail(order: Order, toEmail?: string) {
   const html = buildOrderHtml(order);
   const text = buildOrderText(order);
 
-  const mailOptions = {
-    from: `"Mustalam Restaurant" <${from}>`,
+  // attach dizminu logo inline using cid 'dizminuLogo'
+  const logoPath = path.join(process.cwd(), 'frontend', 'src', 'images', 'dizminuLogo.png');
+
+  const mailOptions: any = {
+    from: `"Dizminu" <${from}>`,
     to: recipient, // <-- dynamic recipient (now includes deliveryDetails.emailID)
     subject: `Your Order #${order.id} - Total $${order.total.toFixed(2)}`,
     text,
     html,
+    attachments: [
+      {
+        filename: 'dizminuLogo.png',
+        path: logoPath,
+        cid: 'dizminuLogo'
+      }
+    ]
   };
 
   const info = await transporter.sendMail(mailOptions);

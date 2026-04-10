@@ -73,4 +73,4 @@ VALUES
 ('Mojito', 'Refreshing mojito', 99.00, 'Beverages', '', true);
 
 INSERT INTO restaurant_settings (id, restaurant_name, payment_qr_image_url, contact_number)
-VALUES (1, 'Franzzo', 'https://dummyimage.com/320x320/111/fff&text=Scan+QR+to+Pay', '+91-9999999999');
+VALUES (1, 'Dizminu', 'https://dummyimage.com/320x320/111/fff&text=Scan+QR+to+Pay', '+91-9999999999');

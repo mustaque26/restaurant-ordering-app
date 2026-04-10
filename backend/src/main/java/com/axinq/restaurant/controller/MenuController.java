@@ -3,7 +3,7 @@ package com.axinq.restaurant.controller;
 import com.axinq.restaurant.dto.MenuItemRequest;
 import com.axinq.restaurant.model.MenuItem;
 import com.axinq.restaurant.service.MenuService;
-import com.axinq.restaurant.service.AdminAuthService;
+import com.axinq.restaurant.service.TenantAuthService;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -15,11 +15,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class MenuController {
 
     private final MenuService menuService;
-    private final AdminAuthService adminAuthService;
+    private final TenantAuthService tenantAuthService;
 
-    public MenuController(MenuService menuService, AdminAuthService adminAuthService) {
+    public MenuController(MenuService menuService, TenantAuthService tenantAuthService) {
         this.menuService = menuService;
-        this.adminAuthService = adminAuthService;
+        this.tenantAuthService = tenantAuthService;
     }
 
     @GetMapping
@@ -35,16 +35,19 @@ public class MenuController {
     @PostMapping
     public MenuItem create(@RequestHeader(value = "Authorization", required = false) String auth,
                            @Valid @RequestBody MenuItemRequest request) {
-        if (!adminAuthService.validateTokenHeader(auth)) {
+        Long tenantId = tenantAuthService.validateTokenHeader(auth);
+        if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
+        // Optionally associate menu item to tenant if multitenant menu support is added.
         return menuService.create(request);
     }
 
     @PutMapping("/{id}")
     public MenuItem update(@RequestHeader(value = "Authorization", required = false) String auth,
                            @PathVariable Long id, @Valid @RequestBody MenuItemRequest request) {
-        if (!adminAuthService.validateTokenHeader(auth)) {
+        Long tenantId = tenantAuthService.validateTokenHeader(auth);
+        if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
         return menuService.update(id, request);
@@ -53,7 +56,8 @@ public class MenuController {
     @PatchMapping("/{id}/availability")
     public MenuItem setAvailability(@RequestHeader(value = "Authorization", required = false) String auth,
                                     @PathVariable Long id, @RequestParam boolean available) {
-        if (!adminAuthService.validateTokenHeader(auth)) {
+        Long tenantId = tenantAuthService.validateTokenHeader(auth);
+        if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
         return menuService.setAvailability(id, available);

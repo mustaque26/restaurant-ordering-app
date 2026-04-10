@@ -11,15 +11,15 @@ import java.util.Properties;
 @Configuration
 public class MailConfig {
 
-    @Value("${spring.mail.franzzo.host:smtp.gmail.com}")
-    private String franzzoHost;
-    @Value("${spring.mail.franzzo.port:587}")
-    private int franzzoPort;
-    @Value("${spring.mail.franzzo.username:franzzo057@gmail.com}")
-    private String franzzoUsername;
-    // Prefer environment variable SPRING_MAIL_FRANZZO_PASSWORD, fall back to property spring.mail.franzzo.password
-    @Value("${SPRING_MAIL_FRANZZO_PASSWORD:${spring.mail.franzzo.password:}}")
-    private String franzzoPassword;
+    @Value("${spring.mail.dizminu.host:smtp.gmail.com}")
+    private String dizminuHost;
+    @Value("${spring.mail.dizminu.port:587}")
+    private int dizminuPort;
+    @Value("${spring.mail.dizminu.username:dizminu057@gmail.com}")
+    private String dizminuUsername;
+    // Prefer environment variable SPRING_MAIL_DIZMINU_PASSWORD, fall back to property spring.mail.dizminu.password
+    @Value("${SPRING_MAIL_DIZMINU_PASSWORD:${spring.mail.dizminu.password:}}")
+    private String dizminuPassword;
 
     @Value("${spring.mail.sales.host:smtp.gmail.com}")
     private String salesHost;
@@ -31,13 +31,13 @@ public class MailConfig {
     @Value("${SPRING_MAIL_SALES_PASSWORD:${spring.mail.sales.password:}}")
     private String salesPassword;
 
-    @Bean(name = "franzzoMailSender")
-    public JavaMailSender franzzoMailSender() {
+    @Bean(name = "dizminuMailSender")
+    public JavaMailSender dizminuMailSender() {
         JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
-        mailSender.setHost(franzzoHost);
-        mailSender.setPort(franzzoPort);
-        mailSender.setUsername(franzzoUsername);
-        if (franzzoPassword != null && !franzzoPassword.isBlank()) mailSender.setPassword(franzzoPassword);
+        mailSender.setHost(dizminuHost);
+        mailSender.setPort(dizminuPort);
+        mailSender.setUsername(dizminuUsername);
+        if (dizminuPassword != null && !dizminuPassword.isBlank()) mailSender.setPassword(dizminuPassword);
 
         Properties props = mailSender.getJavaMailProperties();
         props.put("mail.transport.protocol", "smtp");

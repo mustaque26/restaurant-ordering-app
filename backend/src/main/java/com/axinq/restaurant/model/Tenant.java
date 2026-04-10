@@ -2,6 +2,9 @@ package com.axinq.restaurant.model;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.axinq.restaurant.config.AttributeEncryptor;
 
 @Entity
 @Table(name = "tenants")
@@ -22,6 +25,12 @@ public class Tenant {
     private String featuresJson; // simple JSON string storing selected extras
     private boolean onboarded = false;
     private java.math.BigDecimal subscriptionAmount;
+
+    // New: store per-tenant Gmail App Password (store encrypted in production!)
+    @JsonIgnore
+    @Convert(converter = AttributeEncryptor.class)
+    @Column(name = "gmail_app_password", length = 2048)
+    private String gmailAppPassword;
 
     private Instant createdAt = Instant.now();
 
@@ -53,6 +62,24 @@ public class Tenant {
     public void setOnboarded(boolean onboarded) { this.onboarded = onboarded; }
     public java.math.BigDecimal getSubscriptionAmount() { return subscriptionAmount; }
     public void setSubscriptionAmount(java.math.BigDecimal subscriptionAmount) { this.subscriptionAmount = subscriptionAmount; }
+
+    // Raw password accessors (ignored in JSON). IMPORTANT: store encrypted in real deployments.
+    @JsonIgnore
+    public String getGmailAppPassword() { return gmailAppPassword; }
+
+    public void setGmailAppPassword(String gmailAppPassword) { this.gmailAppPassword = gmailAppPassword; }
+
+    // Expose a masked version in API responses for UI (e.g. ****abcd)
+    @JsonProperty("gmailAppPasswordMasked")
+    @Transient
+    public String getGmailAppPasswordMasked() {
+        if (gmailAppPassword == null || gmailAppPassword.isEmpty()) return null;
+        int len = gmailAppPassword.length();
+        if (len <= 4) return "****";
+        String last = gmailAppPassword.substring(len - 4);
+        return "****" + last;
+    }
+
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

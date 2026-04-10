@@ -41,9 +41,9 @@ Open `http://localhost:5173`.
 
 This project uses two separate SMTP configurations:
 
-- System mail (franzzo): used for OTPs, order confirmations when no tenant-specific sender is available.
-  - Username env var: `SPRING_MAIL_FRANZZO_USERNAME` (default present in `application.properties`) 
-  - Password env var: `SPRING_MAIL_FRANZZO_PASSWORD`
+- System mail (dizminu): used for OTPs, order confirmations when no tenant-specific sender is available.
+  - Username env var: `SPRING_MAIL_DIZMINU_USERNAME` (default present in `application.properties`) 
+  - Password env var: `SPRING_MAIL_DIZMINU_PASSWORD`
 
 - Sales/onboarding mail (Axinq): used for tenant onboarding emails.
   - Username env var: `SPRING_MAIL_SALES_USERNAME` (default present in `application.properties`)
@@ -52,8 +52,8 @@ This project uses two separate SMTP configurations:
 Example (zsh):
 
 ```bash
-export SPRING_MAIL_FRANZZO_USERNAME="franzzo057@gmail.com"
-export SPRING_MAIL_FRANZZO_PASSWORD="(franzzo-smtp-password)"
+export SPRING_MAIL_DIZMINU_USERNAME="dizminu057@gmail.com"
+export SPRING_MAIL_DIZMINU_PASSWORD="(dizminu-smtp-password)"
 export SPRING_MAIL_SALES_USERNAME="consulting@axinq.com"
 export SPRING_MAIL_SALES_PASSWORD="(sales-smtp-password)"
 ```

@@ -83,7 +83,7 @@ public class OrderController {
                     Tenant t = tenantRepository.findById(request.tenantId()).orElse(null);
                     if (t != null && t.isOnboarded() && t.getAdminEmail() != null && !t.getAdminEmail().isBlank()) {
                         try {
-                            tenantEmailService.sendFromTenantAddress(t.getAdminEmail(), request.email(), "Order Confirmation - " + (t.getName() != null ? t.getName() : "Your Restaurant"), body);
+                            tenantEmailService.sendFromTenantAddress(t.getAdminEmail(), t.getGmailAppPassword(), request.email(), "Order Confirmation - " + (t.getName() != null ? t.getName() : "Your Restaurant"), body);
                             sent = true;
                         } catch (Exception ex) {
                             sent = false;
@@ -91,7 +91,7 @@ public class OrderController {
                     }
                 }
                 if (!sent) {
-                    systemEmailService.sendFromFranzzo(request.email(), "Order Confirmation - Franzzo Restaurant", body);
+                    systemEmailService.sendFromDizminu(request.email(), "Order Confirmation - Dizminu Restaurant", body);
                 }
             } catch (Exception ex) {
                 // log and continue

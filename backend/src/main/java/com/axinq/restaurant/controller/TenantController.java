@@ -38,7 +38,7 @@ public class TenantController {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid admin email"));
         }
         // Persist subscription amount if provided (client may send subscriptionAmount)
-        // If the incoming JSON contains subscriptionAmount, JPA will map it to tenant.subscriptionAmount
+        // Also persist gmailAppPassword if provided (will be ignored in JSON responses)
         Tenant saved = tenantRepository.save(tenant);
 
         // create setup token
@@ -51,11 +51,11 @@ public class TenantController {
 
         // send onboarding email with setup link
         try {
-            String subject = "Welcome to Axinq - your tenant has been created";
+            String subject = "Welcome to Dizminu - your tenant has been created";
             String link = String.format("%s/tenant/%d/settings?token=%s", "http://localhost:5173", saved.getId(), token);
             StringBuilder html = new StringBuilder();
             html.append("<div style=\"font-family: Arial, Helvetica, sans-serif; color: #222;\">\n");
-            html.append("<h2 style=\"color:#0b486b;\">Welcome to Axinq</h2>\n");
+            html.append("<h2 style=\"color:#0b486b;\">Welcome to Dizminu</h2>\n");
             html.append("<p>Your tenant has been created. Click the button below to complete setup:</p>\n");
             html.append(String.format("<p><a href=\"%s\" style=\"background:#0b486b;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;\">Complete setup</a></p>", link));
             html.append("<h3>Tenant details</h3>\n");
@@ -69,8 +69,16 @@ public class TenantController {
             }
             html.append("<li><strong>Features:</strong> ").append(saved.getFeaturesJson() != null ? saved.getFeaturesJson() : "{}").append("</li>\n");
             html.append("</ul>\n");
-            html.append("<p>Best regards,<br/>Axinq</p>\n");
-            html.append("<img src=\"cid:axinqLogo\" alt=\"Axinq\" style=\"height:48px;margin-top:8px;\"/>\n");
+
+            // signature: text first, then logo, then two-line tagline (left-aligned)
+            html.append("<div style=\"text-align:left;margin-top:12px;font-family: Arial, Helvetica, sans-serif;\">\n");
+            html.append("  <p style=\"margin:0 0 8px 0;color:#222;font-size:14px;\">Best regards,<br/><strong>Dizminu</strong></p>\n");
+            html.append("  <div style=\"margin-top:6px;\">\n");
+            html.append("    <img src=\"cid:dizminuLogo\" alt=\"Dizminu\" style=\"width:88px;height:auto;display:block;\"/>\n");
+            html.append("  </div>\n");
+            html.append("  <div style=\"margin-top:8px;color:#0b486b;font-weight:700;font-size:13px;line-height:1;\">Axinq Technology</div>\n");
+            html.append("  <div style=\"color:#0b486b;font-weight:600;font-size:13px;margin-top:2px;\">for Smarter Dining</div>\n");
+            html.append("</div>\n");
             html.append("</div>");
 
             try {
@@ -117,6 +125,11 @@ public class TenantController {
             if (incoming.getName() != null) t.setName(incoming.getName());
             if (incoming.getLogoUrl() != null) t.setLogoUrl(incoming.getLogoUrl());
             if (incoming.getFeaturesJson() != null) t.setFeaturesJson(incoming.getFeaturesJson());
+            if (incoming.getAdminEmail() != null) t.setAdminEmail(incoming.getAdminEmail());
+            if (incoming.getPlan() != null) t.setPlan(incoming.getPlan());
+            if (incoming.getSubscriptionAmount() != null) t.setSubscriptionAmount(incoming.getSubscriptionAmount());
+            // allow updating gmail app password (incoming password is ignored in JSON output due to @JsonIgnore)
+            if (incoming.getGmailAppPassword() != null) t.setGmailAppPassword(incoming.getGmailAppPassword());
             tenantRepository.save(t);
             return ResponseEntity.ok(t);
         }).orElse(ResponseEntity.notFound().build());
