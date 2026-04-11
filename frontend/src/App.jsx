@@ -65,7 +65,7 @@ export default function App() {
             <nav>
               {/* Always show subscription link; show Menu/Admin only when tenant is logged in */}
               {token ? <Link to="/">Menu</Link> : null}
-              <Link to="/subscriptions">Subscription</Link>
+              <Link to="/subscriptions" className="nav-home">Home</Link>
               {token ? <Link to="/admin">Admin</Link> : null}
             </nav>
           </div>

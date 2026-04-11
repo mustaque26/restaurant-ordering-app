@@ -435,6 +435,48 @@ input, textarea, select {
   opacity: 0.98;
 }
 
+/* Home hero styles */
+.home-hero {
+  background: #071027; /* deep navy to match header */
+  color: white;
+  border-radius: 10px;
+  text-align: center;
+  padding: 36px 20px; /* generous vertical padding */
+}
+
+.home-wordmark {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 900;
+  font-size: 72px; /* large wordmark */
+  line-height: 1;
+  letter-spacing: -1px;
+  margin: 0 auto 8px auto;
+  display: inline-block;
+  background: linear-gradient(90deg, #0b61d0 0%, #0ea5e9 38%, #1fb36a 68%, #28c76f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 2px 18px rgba(2,6,23,0.45);
+}
+
+.home-subtitle {
+  max-width: 980px;
+  margin: 8px auto 14px auto;
+  font-size: 16px;
+  color: rgba(255,255,255,0.9);
+}
+
+.home-cta-row { margin-top: 12px }
+
+@media (max-width: 960px) {
+  .home-wordmark { font-size: 56px }
+}
+
+@media (max-width: 640px) {
+  .home-wordmark { font-size: 34px }
+  .home-subtitle { font-size: 14px }
+}
+
 /* Billing modal styles */
 .modal-overlay {
   position: fixed;
@@ -474,3 +516,28 @@ input, textarea, select {
   cursor: pointer;
 }
 .info-btn:hover { opacity: 0.95 }
+
+/* Nav home wordmark - gradient, inline sized */
+.nav a.nav-home, .nav-home {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+  background: linear-gradient(90deg, #0b61d0 0%, #0ea5e9 38%, #1fb36a 68%, #28c76f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-decoration: none;
+  vertical-align: middle;
+  padding-left: 6px; /* small spacing from logo */
+}
+
+/* keep gradient on hover and avoid color override */
+.nav a.nav-home:hover {
+  color: transparent;
+  opacity: 0.95; /* subtle hover effect without changing color */
+}
+
+@media (max-width: 640px) {
+  .nav a.nav-home, .nav-home { font-size: 18px }
+}
