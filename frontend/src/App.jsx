@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { getToken } from './tenantAuth'
 
 // import the dizminu logo image placed in src/images
-import dizminuLogo from './images/dizminuLogo.png'
+import dizminuLogo from './images/DizminuLogo.png'
 
 export default function App() {
   const [token, setToken] = useState(getToken())

@@ -8,6 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,16 +32,43 @@ public class TenantAuthService {
         if (email == null || email.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
         }
-        Tenant t = tenantRepository.findByAdminEmail(email);
-        if (t == null) {
+        List<Tenant> tenants = tenantRepository.findByAdminEmailIgnoreCase(email.trim());
+        if (tenants.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found for this email");
         }
-        if (restaurantName != null && !restaurantName.isBlank()) {
-            String tn = t.getName() != null ? t.getName().trim() : "";
-            if (!tn.equalsIgnoreCase(restaurantName.trim())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant name does not match the email");
+
+        Tenant t;
+        if (tenants.size() == 1) {
+            t = tenants.get(0);
+            // If restaurantName supplied, verify it matches
+            if (restaurantName != null && !restaurantName.isBlank()) {
+                String tn = t.getName() != null ? t.getName().trim() : "";
+                if (!tn.equalsIgnoreCase(restaurantName.trim())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant name does not match the email");
+                }
+            }
+        } else {
+            // Multiple tenants share the same admin email — disambiguate
+            if (restaurantName != null && !restaurantName.isBlank()) {
+                // Try exact (case-insensitive) name match
+                final String rn = restaurantName.trim();
+                List<Tenant> matched = tenants.stream()
+                    .filter(c -> rn.equalsIgnoreCase(c.getName() != null ? c.getName().trim() : ""))
+                    .toList();
+                if (matched.size() == 1) {
+                    t = matched.get(0);
+                } else if (matched.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No tenant found with that email and restaurant name");
+                } else {
+                    // Multiple tenants even after name match — prefer the onboarded one
+                    t = selectOnboardedTenant(matched, "Multiple tenants match that email and name; please contact support");
+                }
+            } else {
+                // No restaurantName supplied — try to fall back to onboarded tenant
+                t = selectOnboardedTenant(tenants, "Multiple tenants share this email. Please provide your restaurant name to log in.");
             }
         }
+
         int r = (int) (Math.random() * 1_000_000);
         String otp = String.format("%06d", r);
         Instant expiry = Instant.now().plusSeconds(5 * 60);
@@ -48,7 +76,6 @@ public class TenantAuthService {
 
         String subject = "Your tenant login OTP";
         String body = "Your OTP for tenant login is: " + otp + "\nThis code will expire in 5 minutes.";
-        // send from sales (Axinq) so onboarding and tenant communications come from consulting@axinq.com
         systemEmailService.sendFromSales(email, subject, body);
     }
 
@@ -93,6 +120,18 @@ public class TenantAuthService {
     private String extractToken(String authHeader) {
         if (authHeader.startsWith("Bearer ")) return authHeader.substring(7).trim();
         return authHeader.trim();
+    }
+
+    /**
+     * From a list of candidates, return the single onboarded tenant,
+     * or throw CONFLICT if ambiguous (zero or multiple onboarded).
+     */
+    private Tenant selectOnboardedTenant(List<Tenant> candidates, String conflictMessage) {
+        List<Tenant> onboardedList = candidates.stream().filter(Tenant::isOnboarded).toList();
+        if (onboardedList.size() == 1) {
+            return onboardedList.get(0);
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT, conflictMessage);
     }
 
     private static class OtpEntry {

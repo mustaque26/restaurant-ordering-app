@@ -541,3 +541,22 @@ input, textarea, select {
 @media (max-width: 640px) {
   .nav a.nav-home, .nav-home { font-size: 18px }
 }
+
+/* Inline tenant form expand/collapse animation */
+.tenant-form-container {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.35s ease, opacity 0.3s ease;
+}
+
+.tenant-form-container.expanded {
+  max-height: 600px;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tenant-form-container {
+    transition: none;
+  }
+}
