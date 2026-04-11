@@ -148,8 +148,49 @@ export default function SubscriptionPage() {
   const extrasTotal = selectedExtras.length * FEATURE_PRICE
   const primeTotal = primeBase + extrasTotal
 
+  // Billing modal state
+  const [showBillingModal, setShowBillingModal] = useState(false)
+  const [billingModalPlan, setBillingModalPlan] = useState(null)
+
+  function openBillingModal(plan) {
+    setBillingModalPlan(plan)
+    setShowBillingModal(true)
+  }
+
+  function closeBillingModal() {
+    setShowBillingModal(false)
+    setBillingModalPlan(null)
+  }
+
   return (
     <div className="subscription-page">
+      {/* Billing modal (shows when user clicks info) */}
+      {showBillingModal && (
+        <div className="modal-overlay" onClick={closeBillingModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Billing details">
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <h4 style={{margin:0}}>Billing details</h4>
+              <button className="modal-close" onClick={closeBillingModal} aria-label="Close">×</button>
+            </div>
+            <div style={{marginTop:10}}>
+              <p className="muted" style={{marginBottom:8}}>
+                Your first month is free for the <strong>{billingModalPlan || 'selected plan'}</strong>. After the free month, billing starts automatically at:
+              </p>
+              <ul className="features-list" style={{marginTop:0}}>
+                <li>Basic: <strong>₹{basicBase}/month</strong></li>
+                <li>Prime: <strong>₹{primeBase}/month</strong> (plus any optional feature fees)</li>
+              </ul>
+              <p className="muted" style={{marginTop:8}}>
+                Extras (like Email or WhatsApp) are charged from the second month onward when enabled. Cancel anytime before the renewal to avoid charges.
+              </p>
+              <p className="muted" style={{marginTop:8}}>
+                Need help? Contact support at <strong>support@dizminu.com</strong> and we’ll assist with setup or billing questions.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
         <h2 className="page-title">Subscriptions</h2>
         <div>
@@ -206,6 +247,10 @@ export default function SubscriptionPage() {
               <li>Basic support</li>
               <li>No extra communication features</li>
             </ul>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div className="muted" style={{marginTop:6,fontWeight:700}}>Free for the first month</div>
+              <button className="info-btn" onClick={() => openBillingModal('Basic')} aria-label="Billing info">i</button>
+            </div>
             <button onClick={() => choosePlan('basic')} className="subscribe-btn">Choose Basic</button>
           </div>
 
@@ -243,6 +288,10 @@ export default function SubscriptionPage() {
             </div>
 
             <div className="price-summary">Total: <strong>₹{primeTotal}</strong></div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div className="muted" style={{marginTop:6,fontWeight:700}}>Free for the first month</div>
+              <button className="info-btn" onClick={() => openBillingModal('Prime')} aria-label="Billing info">i</button>
+            </div>
             <button onClick={() => choosePlan('prime')} className="subscribe-btn primary">Choose Prime</button>
           </div>
         </div>

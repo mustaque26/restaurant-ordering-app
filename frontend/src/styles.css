@@ -435,26 +435,42 @@ input, textarea, select {
   opacity: 0.98;
 }
 
-@media (max-width: 960px) {
-  .brand-svg svg { height: 56px; }
-  /* match wordmark height to the smaller logo on medium screens */
-  .brand-wordmark { height: 56px; }
+/* Billing modal styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
 }
-
-@media (max-width: 640px) {
-  .brand-svg svg { height: 32px; }
-  /* match wordmark height to mobile logo size */
-  .brand-wordmark { height: 40px; }
+.modal {
+  background: #fff;
+  color: #071027;
+  padding: 18px;
+  width: 420px;
+  max-width: calc(100% - 40px);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(2,6,23,0.4);
 }
-
-@media (max-width: 960px) {
-  .brand-text { font-size: 34px; }
-  .brand-image { width: 56px; height: 56px; }
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
 }
-
-@media (max-width: 640px) {
-  .topbar .container.nav { padding-left: 8px; }
-  .brand-image { width: 40px; height: 40px; padding: 4px; }
-  .brand-text { font-size: 22px; }
-  .brand-tagline { font-size: 10px; max-width: 120px }
+.info-btn {
+  background: #0b61d0;
+  color: #fff;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  cursor: pointer;
 }
+.info-btn:hover { opacity: 0.95 }
