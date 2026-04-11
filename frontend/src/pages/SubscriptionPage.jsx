@@ -2,18 +2,45 @@ import { useState, useEffect } from 'react'
 import api from '../api'
 import { setToken as saveToken, getToken, clearToken as removeToken } from '../tenantAuth'
 import { useNavigate } from 'react-router-dom'
+import { trackEvent } from '../analytics'
 
 const FEATURE_PRICE = 100 // per extra feature (payment, email, whatsapp)
 
 export default function SubscriptionPage() {
   const [selectedPlan, setSelectedPlan] = useState(null) // 'basic'|'prime'
+  const [showTenantForm, setShowTenantForm] = useState(false)
   const [features, setFeatures] = useState({ payment: false, email: false, whatsapp: false })
   const [message, setMessage] = useState('')
-  const [tenantName, setTenantName] = useState('')
-  const [tenantLogo, setTenantLogo] = useState('')
-  const [tenantEmail, setTenantEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [showTenantForm, setShowTenantForm] = useState(false)
+
+  // Per-plan tenant form state (preserves entries when switching plans)
+  const [tenantForms, setTenantForms] = useState({
+    basic: { name: '', logo: '', email: '' },
+    prime: { name: '', logo: '', email: '' }
+  })
+  const [tenantErrors, setTenantErrors] = useState({
+    basic: { name: '', email: '' },
+    prime: { name: '', email: '' }
+  })
+
+  function setTenantField(plan, field, value) {
+    setTenantForms(prev => ({ ...prev, [plan]: { ...prev[plan], [field]: value } }))
+    setTenantErrors(prev => ({ ...prev, [plan]: { ...prev[plan], [field]: '' } }))
+  }
+
+  function validateEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+
+  function validateField(plan) {
+    const form = tenantForms[plan]
+    const errors = {}
+    if (!form.name.trim()) errors.name = 'Restaurant name is required'
+    if (!form.email.trim()) errors.email = 'Email is required'
+    else if (!validateEmail(form.email)) errors.email = 'Please enter a valid email'
+    setTenantErrors(prev => ({ ...prev, [plan]: { ...prev[plan], ...errors } }))
+    return Object.keys(errors).length === 0
+  }
 
   // Login state
   const [showLogin, setShowLogin] = useState(false)
@@ -93,25 +120,33 @@ export default function SubscriptionPage() {
     setFeatures(prev => ({ ...prev, [name]: !prev[name] }))
   }
 
-  // When user chooses a plan, reveal the tenant details form
+  // Toggle plan selection — clicking the same plan again collapses the form
   function choosePlan(plan) {
+    if (showTenantForm && selectedPlan === plan) {
+      setShowTenantForm(false)
+      setSelectedPlan(null)
+      return
+    }
     setSelectedPlan(plan)
     setShowTenantForm(true)
     setMessage('')
-    // scroll to form (optional)
+    trackEvent('plan_selected', { plan })
     setTimeout(() => {
-      const el = document.querySelector('.tenant-form')
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      const el = document.getElementById(`tenant-form-${plan}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const input = el.querySelector('input')
+        if (input) input.focus()
+      }
     }, 100)
   }
 
   // Submit tenant + subscription to backend
   async function submitSubscription() {
+    if (!selectedPlan) return
+    if (!validateField(selectedPlan)) return
+    const form = tenantForms[selectedPlan]
     setMessage('')
-    if (!tenantName || !tenantEmail) {
-      setMessage('Please provide restaurant name and admin email before submitting.')
-      return
-    }
     setSubmitting(true)
     try {
       let base = selectedPlan === 'basic' ? 299 : 599
@@ -121,19 +156,19 @@ export default function SubscriptionPage() {
       }
       const total = base + extras
       const payload = {
-        name: tenantName,
-        logoUrl: tenantLogo,
-        adminEmail: tenantEmail,
-        plan: (selectedPlan || 'basic').toUpperCase(),
+        name: form.name,
+        logoUrl: form.logo,
+        adminEmail: form.email,
+        plan: selectedPlan.toUpperCase(),
         featuresJson: JSON.stringify(features)
       }
       const res = await api.post('/tenants', payload)
       const tenant = res.data.tenant || res.data
       const setupToken = res.data.setupToken
+      trackEvent('subscription_created', { plan: selectedPlan, total })
       setMessage(`Tenant created (id=${tenant.id}). Setup token: ${setupToken}. Subscribed for ₹${total}`)
-      // optionally navigate to tenant settings with token
-      // location.href = `/tenant/${tenant.id}/settings?token=${setupToken}`
       setShowTenantForm(false)
+      setSelectedPlan(null)
     } catch (err) {
       console.error(err)
       setMessage('Failed to create tenant. Please try again.')
@@ -155,6 +190,7 @@ export default function SubscriptionPage() {
   function openBillingModal(plan) {
     setBillingModalPlan(plan)
     setShowBillingModal(true)
+    trackEvent('billing_modal_open', { plan })
   }
 
   function closeBillingModal() {
@@ -315,7 +351,35 @@ export default function SubscriptionPage() {
               <div className="muted" style={{marginTop:6,fontWeight:700}}>Free for the first month</div>
               <button className="info-btn" onClick={() => openBillingModal('Basic')} aria-label="Billing info">i</button>
             </div>
-            <button onClick={() => choosePlan('basic')} className="subscribe-btn">Choose Basic</button>
+            <button onClick={() => choosePlan('basic')} className="subscribe-btn" aria-expanded={showTenantForm && selectedPlan === 'basic'}>
+              {showTenantForm && selectedPlan === 'basic' ? 'Cancel' : 'Choose Basic'}
+            </button>
+            <div
+              id="tenant-form-basic"
+              className={`tenant-form-container${showTenantForm && selectedPlan === 'basic' ? ' expanded' : ''}`}
+              aria-hidden={!(showTenantForm && selectedPlan === 'basic')}
+            >
+              <div className="card pad mt">
+                <h4>Tenant details — Basic</h4>
+                <div>
+                  <input placeholder="Restaurant name *" value={tenantForms.basic.name} onChange={(e) => setTenantField('basic', 'name', e.target.value)} />
+                  {tenantErrors.basic.name && <div className="field-error">{tenantErrors.basic.name}</div>}
+                </div>
+                <input placeholder="Logo URL (optional)" value={tenantForms.basic.logo} onChange={(e) => setTenantField('basic', 'logo', e.target.value)} />
+                <div>
+                  <input placeholder="Admin email *" value={tenantForms.basic.email} onChange={(e) => setTenantField('basic', 'email', e.target.value)} />
+                  {tenantErrors.basic.email && <div className="field-error">{tenantErrors.basic.email}</div>}
+                </div>
+                <div style={{marginTop:8}}>
+                  <small className="muted">Tenant will be created on submit. You will receive admin details on the provided email.</small>
+                </div>
+                <div style={{marginTop:12}}>
+                  <button onClick={submitSubscription} disabled={submitting} className="subscribe-btn">
+                    {submitting ? 'Submitting...' : 'Submit & Create Tenant (BASIC)'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className={`sub-card ${selectedPlan === 'prime' ? 'selected' : ''}`}>
@@ -356,26 +420,40 @@ export default function SubscriptionPage() {
               <div className="muted" style={{marginTop:6,fontWeight:700}}>Free for the first month</div>
               <button className="info-btn" onClick={() => openBillingModal('Prime')} aria-label="Billing info">i</button>
             </div>
-            <button onClick={() => choosePlan('prime')} className="subscribe-btn primary">Choose Prime</button>
+            <button onClick={() => choosePlan('prime')} className="subscribe-btn primary" aria-expanded={showTenantForm && selectedPlan === 'prime'}>
+              {showTenantForm && selectedPlan === 'prime' ? 'Cancel' : 'Choose Prime'}
+            </button>
+            <div
+              id="tenant-form-prime"
+              className={`tenant-form-container${showTenantForm && selectedPlan === 'prime' ? ' expanded' : ''}`}
+              aria-hidden={!(showTenantForm && selectedPlan === 'prime')}
+            >
+              <div className="card pad mt">
+                <h4>Tenant details — Prime</h4>
+                <div>
+                  <input placeholder="Restaurant name *" value={tenantForms.prime.name} onChange={(e) => setTenantField('prime', 'name', e.target.value)} />
+                  {tenantErrors.prime.name && <div className="field-error">{tenantErrors.prime.name}</div>}
+                </div>
+                <input placeholder="Logo URL (optional)" value={tenantForms.prime.logo} onChange={(e) => setTenantField('prime', 'logo', e.target.value)} />
+                <div>
+                  <input placeholder="Admin email *" value={tenantForms.prime.email} onChange={(e) => setTenantField('prime', 'email', e.target.value)} />
+                  {tenantErrors.prime.email && <div className="field-error">{tenantErrors.prime.email}</div>}
+                </div>
+                <div style={{marginTop:8}}>
+                  <small className="muted">Tenant will be created on submit. You will receive admin details on the provided email.</small>
+                </div>
+                <div style={{marginTop:12}}>
+                  <button onClick={submitSubscription} disabled={submitting} className="subscribe-btn primary">
+                    {submitting ? 'Submitting...' : `Submit & Create Tenant (PRIME — ₹${primeTotal}/mo)`}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {message && <div className="subscribe-message">{message}</div>}
-
-      {/* Tenant details form - shown after choosing a plan */}
-      <div className={`card pad mt tenant-form ${showTenantForm ? '' : 'hidden'}`} style={{display: showTenantForm ? 'block' : 'none'}}>
-         <h4>Tenant details</h4>
-         <input placeholder="Restaurant name" value={tenantName} onChange={(e) => setTenantName(e.target.value)} />
-         <input placeholder="Logo URL (optional)" value={tenantLogo} onChange={(e) => setTenantLogo(e.target.value)} />
-         <input placeholder="Admin email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} />
-         <div style={{marginTop:8}}>
-          <small className="muted">Tenant will be created on submit. You will receive admin details on the provided email.</small>
-         </div>
-         <div style={{marginTop:12}}>
-          <button onClick={submitSubscription} disabled={submitting || !tenantName || !tenantEmail} className="subscribe-btn">{submitting ? 'Submitting...' : `Submit & Create Tenant (${selectedPlan ? selectedPlan.toUpperCase() : 'BASIC'})`}</button>
-         </div>
-       </div>
 
       <div className="faq card pad mt">
          <h4>Notes</h4>
