@@ -61,23 +61,11 @@ public class TenantAuthService {
                     throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No tenant found with that email and restaurant name");
                 } else {
                     // Multiple tenants even after name match — prefer the onboarded one
-                    Tenant onboarded = matched.stream().filter(Tenant::isOnboarded).findFirst().orElse(null);
-                    if (onboarded != null) {
-                        t = onboarded;
-                    } else {
-                        throw new ResponseStatusException(HttpStatus.CONFLICT,
-                            "Multiple tenants match that email and name; please contact support");
-                    }
+                    t = selectOnboardedTenant(matched, "Multiple tenants match that email and name; please contact support");
                 }
             } else {
                 // No restaurantName supplied — try to fall back to onboarded tenant
-                List<Tenant> onboardedList = tenants.stream().filter(Tenant::isOnboarded).toList();
-                if (onboardedList.size() == 1) {
-                    t = onboardedList.get(0);
-                } else {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Multiple tenants share this email. Please provide your restaurant name to log in.");
-                }
+                t = selectOnboardedTenant(tenants, "Multiple tenants share this email. Please provide your restaurant name to log in.");
             }
         }
 
@@ -132,6 +120,18 @@ public class TenantAuthService {
     private String extractToken(String authHeader) {
         if (authHeader.startsWith("Bearer ")) return authHeader.substring(7).trim();
         return authHeader.trim();
+    }
+
+    /**
+     * From a list of candidates, return the single onboarded tenant,
+     * or throw CONFLICT if ambiguous (zero or multiple onboarded).
+     */
+    private Tenant selectOnboardedTenant(List<Tenant> candidates, String conflictMessage) {
+        List<Tenant> onboardedList = candidates.stream().filter(Tenant::isOnboarded).toList();
+        if (onboardedList.size() == 1) {
+            return onboardedList.get(0);
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT, conflictMessage);
     }
 
     private static class OtpEntry {

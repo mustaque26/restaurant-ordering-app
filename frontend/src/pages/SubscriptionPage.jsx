@@ -28,7 +28,7 @@ export default function SubscriptionPage() {
     setTenantErrors(prev => ({ ...prev, [plan]: { ...prev[plan], [field]: '' } }))
   }
 
-  function validateEmail(email) {
+  function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   }
 
@@ -37,7 +37,7 @@ export default function SubscriptionPage() {
     const errors = {}
     if (!form.name.trim()) errors.name = 'Restaurant name is required'
     if (!form.email.trim()) errors.email = 'Email is required'
-    else if (!validateEmail(form.email)) errors.email = 'Please enter a valid email'
+    else if (!isValidEmail(form.email)) errors.email = 'Please enter a valid email'
     setTenantErrors(prev => ({ ...prev, [plan]: { ...prev[plan], ...errors } }))
     return Object.keys(errors).length === 0
   }
