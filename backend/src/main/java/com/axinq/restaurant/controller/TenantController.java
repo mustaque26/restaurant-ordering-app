@@ -5,6 +5,9 @@ import com.axinq.restaurant.model.TenantToken;
 import com.axinq.restaurant.repository.TenantRepository;
 import com.axinq.restaurant.repository.TenantTokenRepository;
 import com.axinq.restaurant.service.SystemEmailService;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +22,8 @@ import java.util.regex.Pattern;
 @RestController
 @RequestMapping("/api/tenants")
 public class TenantController {
+
+    private static final Logger log = LoggerFactory.getLogger(TenantController.class);
 
     private final TenantRepository tenantRepository;
     private final TenantTokenRepository tokenRepository;
@@ -37,9 +42,231 @@ public class TenantController {
         if (tenant.getAdminEmail() == null || !EMAIL_PATTERN.matcher(tenant.getAdminEmail()).matches()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid admin email"));
         }
+
+        // Prevent duplicate tenant registration for same admin email (case-insensitive)
+        List<Tenant> existing = tenantRepository.findByAdminEmailIgnoreCase(tenant.getAdminEmail());
+        if (existing != null && !existing.isEmpty()) {
+            // Return existing subscription details to the caller so UI can show a helpful message
+            Map<String,Object> resp = new HashMap<>();
+            // Provide a sanitized list of existing tenant summaries
+            List<Map<String,Object>> summaries = existing.stream().map(t -> {
+                Map<String,Object> m = new HashMap<>();
+                m.put("id", t.getId());
+                m.put("name", t.getName());
+                m.put("adminEmail", t.getAdminEmail());
+                m.put("plan", t.getPlan());
+                m.put("subscriptionAmount", t.getSubscriptionAmount());
+                m.put("onboarded", t.isOnboarded());
+                return m;
+            }).toList();
+            resp.put("existingTenants", summaries);
+
+            // Decide action: if existing is BASIC and incoming asks for PRIME -> suggest upgrade
+            Tenant first = existing.get(0);
+            String existingPlan = first.getPlan() == null ? "" : first.getPlan();
+            String incomingPlan = tenant.getPlan() == null ? "" : tenant.getPlan();
+            boolean existingIsPrime = "PRIME".equalsIgnoreCase(existingPlan);
+            boolean incomingIsPrime = "PRIME".equalsIgnoreCase(incomingPlan);
+
+            if (!existingIsPrime && incomingIsPrime) {
+                resp.put("error", "An account already exists for this email. You may upgrade the existing subscription to PRIME.");
+                resp.put("action", "upgrade");
+
+                // Send upgrade suggestion email with existing subscription details and an upgrade link
+                try {
+                    String subject = "Dizminu: upgrade available for your restaurant";
+                    StringBuilder html = new StringBuilder();
+                    html.append("<div style=\"font-family: Arial, Helvetica, sans-serif; color:#222;\">\n");
+                    html.append("<h3>Upgrade to PRIME available</h3>\n");
+                    html.append("<p>We found an existing subscription for this email. You can upgrade it to PRIME to enable payments and priority support.</p>\n");
+                    html.append("<ul>\n");
+                    for (Map<String,Object> s : summaries) {
+                        html.append("<li><strong>").append(s.getOrDefault("name", "-")).append("</strong> — plan: ")
+                            .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-"))
+                            .append("</li>\n");
+                    }
+                    html.append("</ul>\n");
+                    // Provide a link to billing/setup (frontend path)
+                    String upgradeLink = String.format("%s/admin/tenants/%s/billing", "http://localhost:5173", first.getId());
+                    html.append(String.format("<p><a href=\"%s\" style=\"background:#0b486b;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;\">Upgrade to PRIME</a></p>", upgradeLink));
+                    html.append("<p>If you need help, contact support@dizminu.com.</p>\n");
+                    html.append("<div style=\"margin-top:12px;color:#0b486b;font-weight:700;font-size:13px;\">Dizminu</div>\n");
+                    html.append("</div>");
+                    try {
+                        systemEmailService.sendFromSalesHtml(tenant.getAdminEmail(), subject, html.toString());
+                    } catch (Exception e) {
+                        StringBuilder body = new StringBuilder();
+                        body.append("Upgrade available for your Dizminu subscription\n\n");
+                        for (Map<String,Object> s : summaries) {
+                            body.append("- ").append(s.getOrDefault("name", "-")).append(" — plan: ")
+                                .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-"))
+                                .append("\n");
+                        }
+                        body.append("\nUpgrade link: ").append(upgradeLink).append("\n");
+                        body.append("\nIf you need help, contact support@dizminu.com\n");
+                        systemEmailService.sendFromSales(tenant.getAdminEmail(), subject, body.toString());
+                    }
+                } catch (Exception emailEx) {
+                    log.warn("Failed to send upgrade email to {}: {}", tenant.getAdminEmail(), emailEx.getMessage());
+                }
+
+                return ResponseEntity.status(409).body(resp);
+            }
+
+            // Default: inform that tenant exists and attach existing subscription details
+            resp.put("error", "A tenant is already registered with this admin email.");
+            resp.put("action", "exists");
+
+            // Send an informational email to the requester with existing subscription details
+            try {
+                String subject = "Dizminu: existing subscription(s) found for your email";
+                StringBuilder html = new StringBuilder();
+                html.append("<div style=\"font-family: Arial, Helvetica, sans-serif; color:#222;\">\n");
+                html.append("<h3>Existing Dizminu subscription(s) for ").append(tenant.getAdminEmail()).append("</h3>\n");
+                html.append("<p>We found the following subscription(s) associated with this email:</p>\n");
+                html.append("<ul>\n");
+                for (Map<String,Object> s : summaries) {
+                    html.append("<li><strong>").append(s.getOrDefault("name", "-")).append("</strong> — plan: ")
+                        .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-")).append("</li>\n");
+                }
+                html.append("</ul>\n");
+                html.append("<p>If you think this is an error, please contact support@dizminu.com.</p>\n");
+                html.append("<div style=\"margin-top:12px;color:#0b486b;font-weight:700;font-size:13px;\">Dizminu</div>\n");
+                html.append("</div>");
+                try {
+                    systemEmailService.sendFromSalesHtml(tenant.getAdminEmail(), subject, html.toString());
+                } catch (Exception e) {
+                    // fallback to plain text
+                    StringBuilder body = new StringBuilder();
+                    body.append("Existing Dizminu subscription(s) for ").append(tenant.getAdminEmail()).append("\n\n");
+                    for (Map<String,Object> s : summaries) {
+                        body.append("- ").append(s.getOrDefault("name", "-")).append(" — plan: ")
+                            .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-"))
+                            .append("\n");
+                    }
+                    body.append("\nIf you think this is an error, please contact support@dizminu.com\n");
+                    systemEmailService.sendFromSales(tenant.getAdminEmail(), subject, body.toString());
+                }
+            } catch (Exception emailEx) {
+                log.warn("Failed to send existing-subscriptions email to {}: {}", tenant.getAdminEmail(), emailEx.getMessage());
+            }
+
+            return ResponseEntity.status(409).body(resp);
+        }
+
         // Persist subscription amount if provided (client may send subscriptionAmount)
         // Also persist gmailAppPassword if provided (will be ignored in JSON responses)
-        Tenant saved = tenantRepository.save(tenant);
+        Tenant saved;
+        try {
+            saved = tenantRepository.save(tenant);
+        } catch (DataIntegrityViolationException dive) {
+            // Could be unique constraint violation (race condition). Load existing tenants and return 409.
+            log.warn("DataIntegrityViolation saving tenant for email {}: {}", tenant.getAdminEmail(), dive.getMessage());
+            List<Tenant> found = tenantRepository.findByAdminEmailIgnoreCase(tenant.getAdminEmail());
+            Map<String,Object> resp = new HashMap<>();
+            // Provide a sanitized list of existing tenant summaries
+            List<Map<String,Object>> summaries = found.stream().map(t -> {
+                Map<String,Object> m = new HashMap<>();
+                m.put("id", t.getId());
+                m.put("name", t.getName());
+                m.put("adminEmail", t.getAdminEmail());
+                m.put("plan", t.getPlan());
+                m.put("subscriptionAmount", t.getSubscriptionAmount());
+                m.put("onboarded", t.isOnboarded());
+                return m;
+            }).toList();
+            resp.put("existingTenants", summaries);
+
+            // Decide action similar to the main duplicate-check: upgrade suggestion when incoming is PRIME and existing is BASIC
+            Tenant firstFound = found.get(0);
+            String existingPlan = firstFound.getPlan() == null ? "" : firstFound.getPlan();
+            String incomingPlan = tenant.getPlan() == null ? "" : tenant.getPlan();
+            boolean existingIsPrime = "PRIME".equalsIgnoreCase(existingPlan);
+            boolean incomingIsPrime = "PRIME".equalsIgnoreCase(incomingPlan);
+
+            if (!existingIsPrime && incomingIsPrime) {
+                resp.put("error", "An account already exists for this email. You may upgrade the existing subscription to PRIME.");
+                resp.put("action", "upgrade");
+
+                // send upgrade email
+                try {
+                    String subject = "Dizminu: upgrade available for your restaurant";
+                    StringBuilder html = new StringBuilder();
+                    html.append("<div style=\"font-family: Arial, Helvetica, sans-serif; color:#222;\">\n");
+                    html.append("<h3>Upgrade to PRIME available</h3>\n");
+                    html.append("<p>We found an existing subscription for this email. You can upgrade it to PRIME to enable payments and priority support.</p>\n");
+                    html.append("<ul>\n");
+                    for (Map<String,Object> s : summaries) {
+                        html.append("<li><strong>").append(s.getOrDefault("name", "-")).append("</strong> — plan: ")
+                            .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-"))
+                            .append("</li>\n");
+                    }
+                    html.append("</ul>\n");
+                    String upgradeLink = String.format("%s/admin/tenants/%s/billing", "http://localhost:5173", firstFound.getId());
+                    html.append(String.format("<p><a href=\"%s\" style=\"background:#0b486b;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none;\">Upgrade to PRIME</a></p>", upgradeLink));
+                    html.append("<p>If you need help, contact support@dizminu.com.</p>\n");
+                    html.append("<div style=\"margin-top:12px;color:#0b486b;font-weight:700;font-size:13px;\">Dizminu</div>\n");
+                    html.append("</div>");
+                    try {
+                        systemEmailService.sendFromSalesHtml(tenant.getAdminEmail(), subject, html.toString());
+                    } catch (Exception e) {
+                        StringBuilder body = new StringBuilder();
+                        body.append("Upgrade available for your Dizminu subscription\n\n");
+                        for (Map<String,Object> s : summaries) {
+                            body.append("- ").append(s.getOrDefault("name", "-")).append(" — plan: ")
+                                .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-"))
+                                .append("\n");
+                        }
+                        body.append("\nUpgrade link: ").append(upgradeLink).append("\n");
+                        body.append("\nIf you need help, contact support@dizminu.com\n");
+                        systemEmailService.sendFromSales(tenant.getAdminEmail(), subject, body.toString());
+                    }
+                } catch (Exception emailEx) {
+                    log.warn("Failed to send upgrade email to {}: {}", tenant.getAdminEmail(), emailEx.getMessage());
+                }
+
+                return ResponseEntity.status(409).body(resp);
+            }
+
+            // Default: inform that tenant exists and attach existing subscription details (action=exists)
+            resp.put("error", "A tenant is already registered with this admin email.");
+            resp.put("action", "exists");
+
+            // Send existing-subscriptions email
+            try {
+                String subject = "Dizminu: existing subscription(s) found for your email";
+                StringBuilder html = new StringBuilder();
+                html.append("<div style=\"font-family: Arial, Helvetica, sans-serif; color:#222;\">\n");
+                html.append("<h3>Existing Dizminu subscription(s) for ").append(tenant.getAdminEmail()).append("</h3>\n");
+                html.append("<p>We found the following subscription(s) associated with this email (possible race on signup):</p>\n");
+                html.append("<ul>\n");
+                for (Map<String,Object> s : summaries) {
+                    html.append("<li><strong>").append(s.getOrDefault("name", "-")).append("</strong> — plan: ")
+                        .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-"))
+                        .append("</li>\n");
+                }
+                html.append("</ul>\n");
+                html.append("<p>If you think this is an error, please contact support@dizminu.com.</p>\n");
+                html.append("<div style=\"margin-top:12px;color:#0b486b;font-weight:700;font-size:13px;\">Dizminu</div>\n");
+                html.append("</div>");
+                try {
+                    systemEmailService.sendFromSalesHtml(tenant.getAdminEmail(), subject, html.toString());
+                } catch (Exception e) {
+                    StringBuilder body = new StringBuilder();
+                    body.append("Existing Dizminu subscription(s) for ").append(tenant.getAdminEmail()).append("\n\n");
+                    for (Map<String,Object> s : summaries) {
+                        body.append("- ").append(s.getOrDefault("name", "-")).append(" — plan: ")
+                            .append(s.getOrDefault("plan", "N/A")).append(" — id: ").append(s.getOrDefault("id", "-"))
+                            .append("\n");
+                    }
+                    body.append("\nIf you think this is an error, please contact support@dizminu.com\n");
+                    systemEmailService.sendFromSales(tenant.getAdminEmail(), subject, body.toString());
+                }
+            } catch (Exception emailEx) {
+                log.warn("Failed to send existing-subscriptions email to {}: {}", tenant.getAdminEmail(), emailEx.getMessage());
+            }
+            return ResponseEntity.status(409).body(resp);
+        }
 
         // create setup token
         String token = UUID.randomUUID().toString();
@@ -100,7 +327,7 @@ public class TenantController {
             }
         } catch (Exception ex) {
             // log and continue
-            ex.printStackTrace();
+            log.error("Error sending onboarding email for tenant {}: {}", saved.getId(), ex.getMessage());
         }
 
         Map<String,Object> resp = new HashMap<>();

@@ -1,24 +1,66 @@
 import { Link, Route, Routes, Navigate, useNavigate } from 'react-router-dom'
+import HomePage from './pages/HomePage'
+import LoginPage from './pages/LoginPage'
 import MenuPage from './pages/MenuPage'
 import AdminPage from './pages/AdminPage'
 import OrderSuccessPage from './pages/OrderSuccessPage'
 import { CartProvider } from './context/CartContext'
+import { LoginProvider, useLogin } from './context/LoginContext'
 import SubscriptionPage from './pages/SubscriptionPage'
 import TenantSettings from './pages/TenantSettings'
 import { useEffect, useState } from 'react'
-import { getToken } from './tenantAuth'
+import { getToken, clearToken as removeTokenLocal } from './tenantAuth'
+import AdminHome from './pages/AdminHome'
+import RequireAuth from './components/RequireAuth'
+import Error401 from './pages/Error401'
+import Error403 from './pages/Error403'
+import ErrorBoundary from './components/ErrorBoundary'
 
 // import the dizminu logo image placed in src/images
 import dizminuLogo from './images/dizminuLogo.png'
 
+function HeaderLoginButton({ token, navigate }) {
+  const { setShowLogin } = useLogin()
+  return (!token ? (
+    <button
+      onClick={() => {
+        console.debug('Header Login clicked: attempting to open login panel')
+        // try context first
+        try {
+          setShowLogin(true)
+        } catch (e) {
+          console.debug('setShowLogin failed, falling back to event/sessionStorage', e)
+          try { sessionStorage.setItem('openTenantLogin', '1') } catch (err) {}
+          try { window.dispatchEvent(new CustomEvent('open-tenant-login')) } catch (err) {}
+        }
+        try { navigate('/subscriptions') } catch (e) { console.debug('navigate failed', e) }
+      }}
+      className="linkish"
+      style={{marginLeft:12, background:'#0b486b', color:'#fff', border:'none', padding:'8px 12px', borderRadius:6, cursor:'pointer'}}
+    >
+      Login
+    </button>
+  ) : null)
+}
+
 export default function App() {
   const [token, setToken] = useState(getToken())
+  const navigate = useNavigate()
 
   useEffect(() => {
     const h = () => setToken(getToken())
     window.addEventListener('tenant-auth-changed', h)
     return () => window.removeEventListener('tenant-auth-changed', h)
   }, [])
+
+  function logoutAndRedirect() {
+    try { removeTokenLocal() } catch (e) {}
+    setToken('')
+    // send global event so other components update
+    try { window.dispatchEvent(new Event('tenant-auth-changed')) } catch (e) {}
+    // navigate to home
+    try { navigate('/') } catch (e) {}
+  }
 
   return (
     <CartProvider>
@@ -64,24 +106,41 @@ export default function App() {
             </div>
             <nav>
               {/* Always show subscription link; show Menu/Admin only when tenant is logged in */}
-              {token ? <Link to="/">Menu</Link> : null}
-              <Link to="/subscriptions" className="nav-home">Home</Link>
+              {token ? <Link to="/menu">Menu</Link> : null}
+              {/* show Home label only for non-logged-in users */}
+              {!token && <Link to="/" className="nav-home">Home</Link>}
+              {/* If not logged in, show Login link; otherwise show Logout button */}
+              {!token ? (
+                <Link to="/login" style={{marginLeft:12}}>Login</Link>
+              ) : (
+                <button onClick={logoutAndRedirect} className="header-btn secondary" style={{marginLeft:12}}>Logout</button>
+              )}
+              <Link to="/subscriptions" style={{marginLeft:12}} aria-label="Subscriptions">Subscriptions</Link>
               {token ? <Link to="/admin">Admin</Link> : null}
-            </nav>
-          </div>
-        </header>
+             </nav>
+           </div>
+         </header>
 
-        <main className="container">
-          <Routes>
-            {/* Default landing should be /subscriptions; root redirects there when not logged in */}
-            <Route path="/" element={token ? <MenuPage /> : <Navigate to="/subscriptions" replace />} />
+         <main className="container">
+           <Routes>
+             {/* Default landing should be /subscriptions; root redirects there when not logged in */}
+            {/* If logged in, send users to the customer menu (avoid rendering AdminHome at root which caused hook mismatch) */}
+            <Route path="/" element={token ? <Navigate to="/menu" replace /> : <HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
             <Route path="/subscriptions" element={<SubscriptionPage />} />
+            {/* Token-based tenant landing: /<token>/<restaurant-name> */}
+            <Route path="/:token/:restaurant" element={<MenuPage />} />
+            <Route path="/menu" element={<MenuPage />} />
+            <Route path="/:id/:restaurant/admin" element={<RequireAuth><TenantSettings /></RequireAuth>} />
+            {/* Tenant setup link should be public so emailed setup token works for onboarding */}
             <Route path="/tenant/:id/settings" element={<TenantSettings />} />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/order-success/:id" element={<OrderSuccessPage />} />
-          </Routes>
-        </main>
-      </div>
-    </CartProvider>
-  )
-}
+            <Route path="/admin" element={<RequireAuth><ErrorBoundary><AdminPage /></ErrorBoundary></RequireAuth>} />
+            <Route path="/401" element={<Error401 />} />
+            <Route path="/403" element={<Error403 />} />
+             <Route path="/order-success/:id" element={<OrderSuccessPage />} />
+           </Routes>
+         </main>
+       </div>
+     </CartProvider>
+   )
+ }

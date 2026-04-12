@@ -541,3 +541,84 @@ input, textarea, select {
 @media (max-width: 640px) {
   .nav a.nav-home, .nav-home { font-size: 18px }
 }
+
+/* Collapsible tenant form container for smooth expand/collapse */
+.tenant-form-container {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: max-height 320ms cubic-bezier(.2,.9,.2,1), opacity 220ms ease, transform 220ms ease;
+  will-change: max-height, opacity, transform;
+}
+.tenant-form-container.expanded {
+  max-height: 600px; /* large enough for the form content */
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tenant-form-container { transition: none }
+}
+
+/* Tenant form appear animation */
+@keyframes formAppear {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tenant-form {
+  transition: box-shadow 240ms ease, transform 240ms ease;
+  border: 1px solid rgba(15,23,42,0.06);
+}
+
+.tenant-form.appear {
+  animation: formAppear 320ms ease both;
+  box-shadow: 0 14px 40px rgba(2,6,23,0.08);
+  border-color: rgba(2,6,23,0.06);
+  outline: none;
+}
+
+/* subtle highlight/glow when visible to draw attention */
+.tenant-form.appear::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0; bottom: 0;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(14,165,233,0.06); /* blue glow */
+  pointer-events: none;
+}
+
+/* highlight inputs on focus inside the tenant form */
+.tenant-form input:focus, .tenant-form textarea:focus {
+  box-shadow: 0 6px 18px rgba(2,6,23,0.06), 0 0 0 4px rgba(14,165,233,0.06);
+  border-color: var(--accent-start);
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .tenant-form.appear { animation: none; transform: none !important; }
+}
+
+/* Ensure position relative to allow pseudo-element highlight */
+.tenant-form { position: relative; }
+
+/* Theme-consistent header button (used for Logout) */
+.header-btn {
+  background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.header-btn.secondary {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.admin-stats { display:flex; gap:24px; align-items:center }
+.admin-stats .stat { text-align:center }
+.admin-stats .stat .num { font-size:22px; font-weight:800 }

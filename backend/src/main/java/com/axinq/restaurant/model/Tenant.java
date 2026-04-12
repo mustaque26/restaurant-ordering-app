@@ -7,7 +7,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.axinq.restaurant.config.AttributeEncryptor;
 
 @Entity
-@Table(name = "tenants")
+@Table(name = "tenants", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"admin_email_lower"})
+})
 public class Tenant {
 
     @Id
@@ -19,6 +21,11 @@ public class Tenant {
     private String logoUrl;
 
     private String adminEmail;
+
+    // Backing column used for case-insensitive unique constraint
+    @JsonIgnore
+    @Column(name = "admin_email_lower", nullable = true)
+    private String adminEmailLower;
 
     private String plan; // BASIC or PRIME
 
@@ -34,6 +41,12 @@ public class Tenant {
 
     private Instant createdAt = Instant.now();
 
+    @PrePersist
+    @PreUpdate
+    private void updateDerivedFields() {
+        if (this.adminEmail != null) this.adminEmailLower = this.adminEmail.toLowerCase();
+    }
+
     public Tenant() {}
 
     public Tenant(String name, String logoUrl, String adminEmail, String plan, String featuresJson) {
@@ -43,6 +56,7 @@ public class Tenant {
         this.plan = plan;
         this.featuresJson = featuresJson;
         this.createdAt = Instant.now();
+        updateDerivedFields();
     }
 
     // getters and setters
@@ -53,7 +67,10 @@ public class Tenant {
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public String getAdminEmail() { return adminEmail; }
-    public void setAdminEmail(String adminEmail) { this.adminEmail = adminEmail; }
+    public void setAdminEmail(String adminEmail) { this.adminEmail = adminEmail; updateDerivedFields(); }
+    // adminEmailLower intentionally has no JSON exposure
+    public String getAdminEmailLower() { return adminEmailLower; }
+    public void setAdminEmailLower(String adminEmailLower) { this.adminEmailLower = adminEmailLower; }
     public String getPlan() { return plan; }
     public void setPlan(String plan) { this.plan = plan; }
     public String getFeaturesJson() { return featuresJson; }

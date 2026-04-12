@@ -8,6 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,16 +32,45 @@ public class TenantAuthService {
         if (email == null || email.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
         }
-        Tenant t = tenantRepository.findByAdminEmail(email);
-        if (t == null) {
+        // Find all tenants for this admin email (case-insensitive). There can be multiple tenants sharing the same admin email.
+        List<Tenant> tenants = tenantRepository.findByAdminEmailIgnoreCase(email.trim());
+        if (tenants == null || tenants.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found for this email");
         }
-        if (restaurantName != null && !restaurantName.isBlank()) {
-            String tn = t.getName() != null ? t.getName().trim() : "";
-            if (!tn.equalsIgnoreCase(restaurantName.trim())) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant name does not match the email");
+
+        Tenant t = null;
+        if (tenants.size() == 1) {
+            t = tenants.get(0);
+        } else {
+            // multiple tenants found for the same email
+            if (restaurantName != null && !restaurantName.isBlank()) {
+                // try to match by restaurant name (case-insensitive)
+                for (Tenant cand : tenants) {
+                    String tn = cand.getName() != null ? cand.getName().trim() : "";
+                    if (tn.equalsIgnoreCase(restaurantName.trim())) {
+                        t = cand;
+                        break;
+                    }
+                }
+                if (t == null) {
+                    // provided restaurant name didn't match any tenant
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Restaurant name does not match the email");
+                }
+            } else {
+                // No restaurant name provided - try to auto-select by onboarded flag or other heuristics
+                for (Tenant cand : tenants) {
+                    if (cand.isOnboarded()) {
+                        t = cand; // prefer an onboarded tenant
+                        break;
+                    }
+                }
+                if (t == null) {
+                    // ambiguous - multiple tenants found and no disambiguating info
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Multiple tenants found for this email; please provide the restaurant name to disambiguate.");
+                }
             }
         }
+
         int r = (int) (Math.random() * 1_000_000);
         String otp = String.format("%06d", r);
         Instant expiry = Instant.now().plusSeconds(5 * 60);
@@ -109,5 +139,20 @@ public class TenantAuthService {
         final Instant expiry;
         TokenEntry(Long tenantId, Instant expiry) { this.tenantId = tenantId; this.expiry = expiry; }
     }
-}
 
+    // Debug helper: return OTP details for the given email when debugging is enabled.
+    public Map<String, Object> debugGetOtp(String email) {
+        String allow = System.getenv("ALLOW_DEBUG_OTPS");
+        if (allow == null || !(allow.equalsIgnoreCase("1") || allow.equalsIgnoreCase("true"))) {
+            return null;
+        }
+        if (email == null) return null;
+        OtpEntry entry = otpStore.get(email.toLowerCase());
+        if (entry == null) return null;
+        return Map.of(
+            "otp", entry.otp,
+            "expiry", entry.expiry.toString(),
+            "tenantId", entry.tenantId
+        );
+    }
+}

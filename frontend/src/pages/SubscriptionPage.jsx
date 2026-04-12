@@ -2,36 +2,50 @@ import { useState, useEffect } from 'react'
 import api from '../api'
 import { setToken as saveToken, getToken, clearToken as removeToken } from '../tenantAuth'
 import { useNavigate } from 'react-router-dom'
+import { trackEvent } from '../analytics'
 
 const FEATURE_PRICE = 100 // per extra feature (payment, email, whatsapp)
 
 export default function SubscriptionPage() {
+  // Plans and features
   const [selectedPlan, setSelectedPlan] = useState(null) // 'basic'|'prime'
   const [features, setFeatures] = useState({ payment: false, email: false, whatsapp: false })
-  const [message, setMessage] = useState('')
-  const [tenantName, setTenantName] = useState('')
-  const [tenantLogo, setTenantLogo] = useState('')
-  const [tenantEmail, setTenantEmail] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [showTenantForm, setShowTenantForm] = useState(false)
 
-  // Login state
-  const [showLogin, setShowLogin] = useState(false)
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginRestaurant, setLoginRestaurant] = useState('')
-  const [loginOtp, setLoginOtp] = useState('')
+  // Tenant/forms state
+  const [tenantForms, setTenantForms] = useState({
+    basic: { name: '', logo: '', email: '' },
+    prime: { name: '', logo: '', email: '' }
+  })
+  const [tenantErrors, setTenantErrors] = useState({
+    basic: { name: '', email: '' },
+    prime: { name: '', email: '' }
+  })
+
+  // UI state
+  const [message, setMessage] = useState('')
+  const [existingTenants, setExistingTenants] = useState([])
   const [loginStep, setLoginStep] = useState(0) // 0 idle,1=otp sent
   const [token, setToken] = useState(getToken())
   const [tenantInfo, setTenantInfo] = useState(null)
+  const [showTenantForm, setShowTenantForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Login fields
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginRestaurant, setLoginRestaurant] = useState('')
+  const [loginOtp, setLoginOtp] = useState('')
+
+  // Pricing (simple constants; keep editable)
+  const basicBase = 299
+  const primeBase = 599
+
   const navigate = useNavigate()
 
   useEffect(() => {
     if (token) {
-      // fetch tenant info
       api.get('/tenant-auth/me', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setTenantInfo(res.data))
         .catch(() => {
-          // invalid token -> clear
           setToken('')
           removeToken()
           setTenantInfo(null)
@@ -39,21 +53,100 @@ export default function SubscriptionPage() {
     } else {
       setTenantInfo(null)
     }
+    // If navigated from Home's Get Started, auto-open selected plan stored in sessionStorage
+    try {
+      const p = sessionStorage.getItem('openSubscriptionPlan')
+      if (p) {
+        sessionStorage.removeItem('openSubscriptionPlan')
+        // call choosePlan asynchronously to avoid hook dependency warnings
+        setTimeout(() => {
+          try { choosePlan(p) } catch (e) { console.debug('auto choosePlan failed', e) }
+        }, 60)
+      }
+    } catch (e) {}
   }, [token])
 
-  function toggleToLogin() {
-    setShowLogin(true)
-    setMessage('')
-  }
-
   function toggleToSubscribe() {
-    setShowLogin(false)
     setMessage('')
   }
 
-  const authHeaders = () => ({ headers: { Authorization: token ? `Bearer ${token}` : '' } })
+  function toggleFeature(name) {
+    setMessage('')
+    setFeatures(prev => ({ ...prev, [name]: !prev[name] }))
+  }
 
-  const sendLoginOtp = async () => {
+  function choosePlan(plan) {
+    // ensure login panel is closed when choosing a plan
+    setMessage('')
+
+    // toggle behavior: collapse if clicking same plan
+    if (showTenantForm && selectedPlan === plan) {
+      setShowTenantForm(false)
+      setSelectedPlan(null)
+      setMessage('')
+      return
+    }
+    setSelectedPlan(plan)
+    setShowTenantForm(true)
+    setMessage('')
+
+    // scroll into view with retries (component may render asynchronously)
+    (function scrollToTenantFormWithRetry(attempts = 10, delay = 120) {
+      let tries = 0
+      const tryScroll = () => {
+        const el = document.getElementById('tenant-form')
+        if (el) {
+          // tenant-form found; scroll into view
+          try {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            const firstInput = el.querySelector('input')
+            if (firstInput) firstInput.focus()
+          } catch (e) {
+            // ignore DOM exceptions and stop
+          }
+          try { trackEvent('plan_selected', { plan }) } catch (e) {}
+          return
+        }
+        // tenant-form not found yet; retry
+        tries++
+        if (tries <= attempts) {
+          setTimeout(tryScroll, delay)
+        } else {
+          // fallback: still fire analytics even if form didn't render
+          try { trackEvent('plan_selected', { plan }) } catch (e) {}
+        }
+      }
+      // start after a short delay to allow React to schedule DOM updates
+      setTimeout(tryScroll, 60)
+    })()
+  }
+
+  // helpers
+  function setTenantField(plan, field, value) {
+    setTenantForms(prev => ({ ...prev, [plan]: { ...prev[plan], [field]: value } }))
+    setTenantErrors(prev => ({ ...prev, [plan]: { ...prev[plan], [field]: '' } }))
+  }
+
+  function validateEmail(email) {
+    if (!email) return false
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  }
+
+  function validateField(plan, field) {
+    const value = tenantForms[plan][field]
+    let err = ''
+    if (field === 'name') {
+      if (!value || !value.trim()) err = 'Restaurant name is required'
+    }
+    if (field === 'email') {
+      if (!value || !value.trim()) err = 'Admin email is required'
+      else if (!validateEmail(value)) err = 'Enter a valid email address'
+    }
+    setTenantErrors(prev => ({ ...prev, [plan]: { ...prev[plan], [field]: err } }))
+    return err === ''
+  }
+
+  async function sendLoginOtp() {
     setMessage('')
     try {
       await api.post('/tenant-auth/send-otp', { email: loginEmail, restaurantName: loginRestaurant })
@@ -64,7 +157,7 @@ export default function SubscriptionPage() {
     }
   }
 
-  const verifyLoginOtp = async () => {
+  async function verifyLoginOtp() {
     setMessage('')
     try {
       const res = await api.post('/tenant-auth/verify-otp', { email: loginEmail, otp: loginOtp })
@@ -73,317 +166,175 @@ export default function SubscriptionPage() {
       setToken(t)
       setLoginStep(0)
       setMessage('Logged in successfully — redirecting to the menu...')
-      // navigate to menu (App will show Menu when token present)
       navigate('/')
     } catch (err) {
       setMessage(err?.response?.data?.message || 'Failed to verify OTP')
     }
   }
 
-  const logout = () => {
+  function logout() {
     removeToken()
     setToken('')
     setTenantInfo(null)
     setMessage('Logged out')
-    // remain on subscriptions page
   }
 
-  function toggleFeature(name) {
-    setMessage('')
-    setFeatures(prev => ({ ...prev, [name]: !prev[name] }))
-  }
-
-  // When user chooses a plan, reveal the tenant details form
-  function choosePlan(plan) {
-    setSelectedPlan(plan)
-    setShowTenantForm(true)
-    setMessage('')
-    // scroll to form (optional)
-    setTimeout(() => {
-      const el = document.querySelector('.tenant-form')
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 100)
-  }
-
-  // Submit tenant + subscription to backend
   async function submitSubscription() {
     setMessage('')
-    if (!tenantName || !tenantEmail) {
-      setMessage('Please provide restaurant name and admin email before submitting.')
+    if (!selectedPlan) {
+      setMessage('Please choose a plan first.')
       return
     }
+    const planKey = selectedPlan === 'basic' ? 'basic' : 'prime'
+    const { name, email, logo } = tenantForms[planKey]
+    const okName = validateField(planKey, 'name')
+    const okEmail = validateField(planKey, 'email')
+    if (!okName || !okEmail) {
+      setMessage('Please fix validation errors before submitting.')
+      return
+    }
+
     setSubmitting(true)
     try {
-      let base = selectedPlan === 'basic' ? 299 : 599
-      let extras = 0
-      if (selectedPlan === 'prime') {
-        extras = Object.values(features).filter(Boolean).length * FEATURE_PRICE
-      }
-      const total = base + extras
       const payload = {
-        name: tenantName,
-        logoUrl: tenantLogo,
-        adminEmail: tenantEmail,
-        plan: (selectedPlan || 'basic').toUpperCase(),
+        name: name.trim(),
+        logoUrl: logo?.trim() || '',
+        adminEmail: email.trim(),
+        plan: selectedPlan.toUpperCase(),
         featuresJson: JSON.stringify(features)
       }
-      const res = await api.post('/tenants', payload)
-      const tenant = res.data.tenant || res.data
-      const setupToken = res.data.setupToken
-      setMessage(`Tenant created (id=${tenant.id}). Setup token: ${setupToken}. Subscribed for ₹${total}`)
-      // optionally navigate to tenant settings with token
-      // location.href = `/tenant/${tenant.id}/settings?token=${setupToken}`
+      // api.baseURL already contains '/api', so use '/tenants' to avoid double '/api/api'
+      const res = await api.post('/tenants', payload, { headers: authHeaders() })
+      const saved = res.data
+      setMessage('Tenant created successfully. Check the admin email for details.')
+      setTenantForms(prev => ({ ...prev, [planKey]: { name: '', logo: '', email: '' } }))
       setShowTenantForm(false)
+      setSelectedPlan(null)
+      try { trackEvent('subscription_created', { tenantId: saved.id, plan: selectedPlan }) } catch (e) {}
     } catch (err) {
-      console.error(err)
-      setMessage('Failed to create tenant. Please try again.')
+      // If backend returns 409 with existing tenants, show actionable message
+      const status = err?.response?.status
+      const data = err?.response?.data
+      if (status === 409 && data) {
+        setMessage(data.error || 'A tenant already exists for this admin email.')
+        setExistingTenants(data.existingTenants || [])
+      } else {
+        setMessage(data?.message || 'Failed to create tenant')
+        setExistingTenants([])
+      }
     } finally {
       setSubmitting(false)
     }
   }
 
-  const basicBase = 299
-  const primeBase = 599
-  const selectedExtras = Object.entries(features).filter(([k, v]) => v).map(([k]) => k)
-  const extrasTotal = selectedExtras.length * FEATURE_PRICE
-  const primeTotal = primeBase + extrasTotal
+  function authHeaders() {
+    return { headers: { Authorization: token ? `Bearer ${token}` : '' } }
+  }
 
-  // Billing modal state
+  // Billing modal state (kept simple)
   const [showBillingModal, setShowBillingModal] = useState(false)
   const [billingModalPlan, setBillingModalPlan] = useState(null)
-
-  function openBillingModal(plan) {
-    setBillingModalPlan(plan)
-    setShowBillingModal(true)
-  }
-
-  function closeBillingModal() {
-    setShowBillingModal(false)
-    setBillingModalPlan(null)
-  }
+  function openBillingModal(plan) { setBillingModalPlan(plan); setShowBillingModal(true) }
+  function closeBillingModal() { setShowBillingModal(false); setBillingModalPlan(null) }
 
   return (
     <div className="subscription-page">
-      {/* Billing modal (shows when user clicks info) */}
+      {/* Billing modal */}
       {showBillingModal && (
         <div className="modal-overlay" onClick={closeBillingModal}>
           <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Billing details">
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <h4 style={{margin:0}}>Billing details</h4>
-              <button className="modal-close" onClick={closeBillingModal} aria-label="Close">×</button>
+              <button onClick={closeBillingModal}>Close</button>
             </div>
             <div style={{marginTop:10}}>
               <p className="muted" style={{marginBottom:8}}>
                 Your first month is free for the <strong>{billingModalPlan || 'selected plan'}</strong>. After the free month, billing starts automatically at:
               </p>
-              <ul className="features-list" style={{marginTop:0}}>
-                <li>Basic: <strong>₹{basicBase}/month</strong></li>
+              <ul>
                 <li>Prime: <strong>₹{primeBase}/month</strong> (plus any optional feature fees)</li>
+                <li>Basic: <strong>₹{basicBase}/month</strong></li>
               </ul>
               <p className="muted" style={{marginTop:8}}>
                 Extras (like Email or WhatsApp) are charged from the second month onward when enabled. Cancel anytime before the renewal to avoid charges.
               </p>
-              <p className="muted" style={{marginTop:8}}>
-                Need help? Contact support at <strong>support@dizminu.com</strong> and we’ll assist with setup or billing questions.
-              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* HOMEPAGE / LANDING CONTENT (inserted into subscription dashboard) */}
-      <div className="home-hero card pad mb">
-        <div className="home-wordmark">Dizminu</div>
-        <p className="home-subtitle muted">Digital menus, instant ordering and secure QR payments with automated Email & WhatsApp receipts. Setup in minutes. No apps required.</p>
-        <div className="home-cta-row">
-          <button className="subscribe-btn primary" onClick={() => choosePlan('prime')}>Get Started</button>
-          <button className="subscribe-btn" style={{marginLeft:8,background:'#ffffff',color:'#071027'}} onClick={() => { const el = document.getElementById('features'); if (el) el.scrollIntoView({behavior:'smooth'}); }}>See Demo</button>
-        </div>
-        <div style={{marginTop:8}} className="muted">14‑day free trial · First month free · No credit card required</div>
-      </div>
-
-      <div id="benefits" className="card pad mb">
-        <h3>Key benefits</h3>
-        <ul className="features-list">
-          <li>Faster table turns — guests order and pay from their phones.</li>
-          <li>Fewer mistakes — orders route directly to your kitchen.</li>
-          <li>Higher revenue — QR checkout and repeat-order prompts increase bills.</li>
-          <li>Less admin work — update menus in seconds, publish instantly.</li>
-        </ul>
-      </div>
-
-      <div id="how" className="card pad mb">
-        <h3>How it works</h3>
-        <ol className="features-list">
-          <li>Create your menu in a clean dashboard.</li>
-          <li>Publish a QR or share a link — no app needed.</li>
-          <li>Accept orders and QR payments; orders reach the kitchen immediately.</li>
-          <li>Automated Email & WhatsApp receipts for every order.</li>
-        </ol>
-      </div>
-
-      <div id="features" className="card pad mb">
-        <h3>Features</h3>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12}}>
-          <div className="card pad"><strong>Digital Menu</strong><div className="muted">Mobile-first menus that load instantly from any QR or link.</div></div>
-          <div className="card pad"><strong>Ordering System</strong><div className="muted">Two-tap ordering that routes directly to the kitchen.</div></div>
-          <div className="card pad"><strong>QR Payments</strong><div className="muted">Fast, secure payments at table or takeaway.</div></div>
-          <div className="card pad"><strong>WhatsApp Notifications</strong><div className="muted">Automated order confirmations and updates.</div></div>
-          <div className="card pad"><strong>Email Notifications</strong><div className="muted">Branded receipts sent automatically to guests.</div></div>
-          <div className="card pad"><strong>Daily Menu Updates</strong><div className="muted">Add, hide or change items in seconds.</div></div>
-        </div>
-      </div>
-
+      {/* Page header for Subscriptions */}
       <div className="card pad mb">
-        <h3>Pricing at a glance</h3>
-        <p className="muted">Basic — core ordering, QR menu and Email receipts. Prime — everything in Basic plus QR Payments, WhatsApp automation and priority support. Both plans include the first month free.</p>
+        <h2 className="page-title">Subscriptions</h2>
+        <p className="muted">Choose a plan that fits your restaurant. First month free.</p>
       </div>
 
-      <div className="card pad mb">
-        <h3>Why Dizminu</h3>
-        <ul className="features-list">
-          <li>Built for restaurateurs — simple and reliable.</li>
-          <li>Reduces queue times and order errors.</li>
-          <li>Works with any QR reader — no apps required.</li>
-          <li>Fast onboarding and local support.</li>
-        </ul>
-      </div>
+      {/* Subscription plans grid (Basic / Prime) */}
+      <div className="subscription-grid" style={{marginTop:18}}>
+        <div className={`sub-card ${selectedPlan === 'basic' ? 'selected' : ''}`}>
+          <h3 className="sub-title">Basic</h3>
+          <div className="price-row">
+            <span className="strike">₹599</span>
+            <span className="price">₹{basicBase}/month</span>
+          </div>
+          <ul className="features-list">
+            <li>Access to menu and ordering</li>
+            <li>Basic support</li>
+            <li>No extra communication features</li>
+          </ul>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <div className="muted" style={{marginTop:6,fontWeight:700}}>Free for the first month</div>
+            <button className="info-btn" onClick={() => openBillingModal('Basic')} aria-label="Billing info">i</button>
+          </div>
+          <button onClick={() => choosePlan('basic')} className="subscribe-btn" style={{marginTop:12}}>Choose Basic</button>
+        </div>
 
-      <div className="card pad mb" style={{textAlign:'center'}}>
-        <h3>Ready to modernize service and grow revenue?</h3>
-        <div><button className="subscribe-btn primary" onClick={() => choosePlan('prime')}>Start Free Trial</button></div>
-        <div style={{marginTop:8}} className="muted">Free 14‑day trial · First month free · Cancel anytime</div>
-      </div>
-
-      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-        <h2 className="page-title">Home</h2>
-        <div>
-          <button className={`linkish ${!showLogin? 'active':''}`} onClick={toggleToSubscribe}>Subscribe</button>
-          <button className={`linkish ${showLogin? 'active':''}`} onClick={toggleToLogin} style={{marginLeft:8}}>Login</button>
+        <div className={`sub-card ${selectedPlan === 'prime' ? 'selected' : ''}`}>
+          <h3 className="sub-title">Prime</h3>
+          <div className="price-row">
+            <span className="strike">₹999</span>
+            <span className="price">₹{primeBase}/month</span>
+          </div>
+          <ul className="features-list">
+            <li>All Basic features</li>
+            <li>Priority support</li>
+            <li>Payment integration</li>
+          </ul>
+          <div className="extras" style={{marginTop:10}}>
+            <div className="extra-row">
+              <div className="col-checkbox"><input id="feat-email" type="checkbox" checked={features.email} onChange={() => toggleFeature('email')} /></div>
+              <label htmlFor="feat-email" className="col-label">Email notifications</label>
+              <div className="col-price">+ ₹{FEATURE_PRICE}</div>
+            </div>
+            <div className="extra-row">
+              <div className="col-checkbox"><input id="feat-whatsapp" type="checkbox" checked={features.whatsapp} onChange={() => toggleFeature('whatsapp')} /></div>
+              <label htmlFor="feat-whatsapp" className="col-label">WhatsApp notifications</label>
+              <div className="col-price">+ ₹{FEATURE_PRICE}</div>
+            </div>
+          </div>
+          <button onClick={() => choosePlan('prime')} className="subscribe-btn primary" style={{marginTop:12}}>Choose Prime</button>
         </div>
       </div>
-      <p className="muted">Subscribe or Login — choose a plan that fits your needs. Pricing shown in INR.</p>
 
-      {/* If logged in, show tenant quick panel and hide subscription options */}
-      {token && tenantInfo ? (
-        <div className="card pad mb">
-          <h3>Logged in as: {tenantInfo.name}</h3>
-          <div>Admin: {tenantInfo.adminEmail}</div>
-          <div style={{marginTop:8}}>
-            <button onClick={() => navigate('/')}>Go to Menu</button>
-            <button onClick={() => navigate('/admin')} style={{marginLeft:8}}>Go to Admin</button>
-            <button onClick={logout} style={{marginLeft:8}}>Logout</button>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Login panel */}
-      {showLogin && !token && (
-        <div className="card pad mb">
-          <h3>Tenant Login</h3>
-          {message && <div className="muted">{message}</div>}
-          <div className="form-grid">
-            <input placeholder="Tenant admin email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} />
-            <input placeholder="Restaurant name" value={loginRestaurant} onChange={(e) => setLoginRestaurant(e.target.value)} />
-            {loginStep === 1 && (
-              <input placeholder="Enter 6-digit OTP" value={loginOtp} onChange={(e) => setLoginOtp(e.target.value)} />
-            )}
-            {loginStep === 0 ? (
-              <button onClick={sendLoginOtp}>Send OTP</button>
-            ) : (
-              <button onClick={verifyLoginOtp}>Verify OTP</button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* If not in login mode, show subscription options */}
-      {!showLogin && !token && (
-        <div className="subscription-grid">
-          <div className={`sub-card ${selectedPlan === 'basic' ? 'selected' : ''}`}>
-            <h3 className="sub-title">Basic</h3>
-            <div className="price-row">
-              <span className="strike">₹599</span>
-              <span className="price">₹{basicBase}/month</span>
-            </div>
-            <ul className="features-list">
-              <li>Access to menu and ordering</li>
-              <li>Basic support</li>
-              <li>No extra communication features</li>
-            </ul>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div className="muted" style={{marginTop:6,fontWeight:700}}>Free for the first month</div>
-              <button className="info-btn" onClick={() => openBillingModal('Basic')} aria-label="Billing info">i</button>
-            </div>
-            <button onClick={() => choosePlan('basic')} className="subscribe-btn">Choose Basic</button>
-          </div>
-
-          <div className={`sub-card ${selectedPlan === 'prime' ? 'selected' : ''}`}>
-            <h3 className="sub-title">Prime</h3>
-            <div className="price-row">
-                <span className="strike">₹999</span>
-              <span className="price">₹{primeBase}/month</span>
-            </div>
-            <ul className="features-list">
-              <li>All Basic features</li>
-              <li>Priority support</li>
-              <li>Payment integration</li>
-              <li>Enable extra facilities below (optional)</li>
-            </ul>
-
-            <div className="extras">
-              <div className="extra-note">Payment integration</div>
-
-              <div className="extra-row">
-                <div className="col-checkbox">
-                  <input id="feat-email" type="checkbox" checked={features.email} onChange={() => toggleFeature('email')} />
-                </div>
-                <label htmlFor="feat-email" className="col-label">Email notifications</label>
-                <div className="col-price">+ ₹{FEATURE_PRICE}</div>
-              </div>
-
-              <div className="extra-row">
-                <div className="col-checkbox">
-                  <input id="feat-whatsapp" type="checkbox" checked={features.whatsapp} onChange={() => toggleFeature('whatsapp')} />
-                </div>
-                <label htmlFor="feat-whatsapp" className="col-label">WhatsApp notifications</label>
-                <div className="col-price">+ ₹{FEATURE_PRICE}</div>
+      {/* If a plan is selected, show the tenant details form below the hero */}
+      {/* Collapsible container for tenant form (smooth expand + appear animation) */}
+      {selectedPlan && (
+        <div id="tenant-form-wrapper" className={`tenant-form-container ${showTenantForm ? 'expanded' : ''}`}>
+          {showTenantForm && (
+            <div id="tenant-form" className={`card pad mt tenant-form appear`}>
+              <h4>Tenant details — {selectedPlan?.toUpperCase()}</h4>
+              <input placeholder="Restaurant name" value={tenantForms[selectedPlan].name} onChange={(e) => setTenantField(selectedPlan,'name',e.target.value)} onBlur={() => validateField(selectedPlan,'name')} />
+              {tenantErrors[selectedPlan].name && <div className="field-error">{tenantErrors[selectedPlan].name}</div>}
+              <input placeholder="Logo URL (optional)" value={tenantForms[selectedPlan].logo} onChange={(e) => setTenantField(selectedPlan,'logo',e.target.value)} />
+              <input placeholder="Admin email" value={tenantForms[selectedPlan].email} onChange={(e) => setTenantField(selectedPlan,'email',e.target.value)} onBlur={() => validateField(selectedPlan,'email')} />
+              {tenantErrors[selectedPlan].email && <div className="field-error">{tenantErrors[selectedPlan].email}</div>}
+              <div style={{marginTop:12}}>
+                <button onClick={submitSubscription} disabled={submitting || !tenantForms[selectedPlan].name || !tenantForms[selectedPlan].email} className="subscribe-btn">{submitting ? 'Submitting...' : `Submit & Create Tenant (${selectedPlan ? selectedPlan.toUpperCase() : ''})`}</button>
               </div>
             </div>
-
-            <div className="price-summary">Total: <strong>₹{primeTotal}</strong></div>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div className="muted" style={{marginTop:6,fontWeight:700}}>Free for the first month</div>
-              <button className="info-btn" onClick={() => openBillingModal('Prime')} aria-label="Billing info">i</button>
-            </div>
-            <button onClick={() => choosePlan('prime')} className="subscribe-btn primary">Choose Prime</button>
-          </div>
+          )}
         </div>
       )}
-
-      {message && <div className="subscribe-message">{message}</div>}
-
-      {/* Tenant details form - shown after choosing a plan */}
-      <div className={`card pad mt tenant-form ${showTenantForm ? '' : 'hidden'}`} style={{display: showTenantForm ? 'block' : 'none'}}>
-         <h4>Tenant details</h4>
-         <input placeholder="Restaurant name" value={tenantName} onChange={(e) => setTenantName(e.target.value)} />
-         <input placeholder="Logo URL (optional)" value={tenantLogo} onChange={(e) => setTenantLogo(e.target.value)} />
-         <input placeholder="Admin email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} />
-         <div style={{marginTop:8}}>
-          <small className="muted">Tenant will be created on submit. You will receive admin details on the provided email.</small>
-         </div>
-         <div style={{marginTop:12}}>
-          <button onClick={submitSubscription} disabled={submitting || !tenantName || !tenantEmail} className="subscribe-btn">{submitting ? 'Submitting...' : `Submit & Create Tenant (${selectedPlan ? selectedPlan.toUpperCase() : 'BASIC'})`}</button>
-         </div>
-       </div>
-
-      <div className="faq card pad mt">
-         <h4>Notes</h4>
-         <ul>
-           <li>Subscription will be activated after payment processing (simulated locally).</li>
-           <li>WhatsApp/email features require server-side configuration (Twilio/SMTP).</li>
-         </ul>
-       </div>
-     </div>
-   )
+    </div>
+  )
 }
