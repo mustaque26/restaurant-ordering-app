@@ -4,7 +4,7 @@ import api from '../api'
 import { useCart } from '../context/CartContext'
 import QrSvg from './QrSvg'
 
-export default function CartPanel({ qrImageUrl }) {
+export default function CartPanel({ qrImageUrl, tenantId = null }) {
   const { items, updateQuantity, clearCart, total } = useCart()
   const navigate = useNavigate()
 
@@ -90,7 +90,8 @@ export default function CartPanel({ qrImageUrl }) {
           quantity: item.quantity
         })),
         sendEmail,
-        sendWhatsapp: sendWhatsappFlag
+        sendWhatsapp: sendWhatsappFlag,
+        tenantId // include tenantId when present so server can attach order to tenant
       }
 
       const response = await api.post('/orders', payload)

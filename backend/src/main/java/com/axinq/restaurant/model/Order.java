@@ -35,4 +35,8 @@ public class Order {
     private List<OrderItem> items = new ArrayList<>();
 
     private String email;
+
+    // Which tenant does this order belong to (nullable for global flows)
+    @Column(name = "tenant_id")
+    private Long tenantId;
 }

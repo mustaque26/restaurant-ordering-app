@@ -28,8 +28,13 @@ public class MenuController {
     }
 
     @GetMapping("/available")
-    public List<MenuItem> getAvailable() {
-        return menuService.getAvailable();
+    public List<MenuItem> getAvailable(@RequestHeader(value = "Authorization", required = false) String auth,
+                                       @RequestParam(value = "tenantId", required = false) Long tenantId) {
+        Long effectiveTenantId = tenantId;
+        if (effectiveTenantId == null) {
+            effectiveTenantId = tenantAuthService.validateTokenHeader(auth);
+        }
+        return menuService.getAvailable(effectiveTenantId);
     }
 
     @PostMapping
@@ -39,8 +44,8 @@ public class MenuController {
         if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
-        // Optionally associate menu item to tenant if multitenant menu support is added.
-        return menuService.create(request);
+        // associate menu item to the requesting tenant
+        return menuService.create(request, tenantId);
     }
 
     @PutMapping("/{id}")
@@ -50,7 +55,7 @@ public class MenuController {
         if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
-        return menuService.update(id, request);
+        return menuService.update(id, request, tenantId);
     }
 
     @PatchMapping("/{id}/availability")
@@ -60,6 +65,6 @@ public class MenuController {
         if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
-        return menuService.setAvailability(id, available);
+        return menuService.setAvailability(id, available, tenantId);
     }
 }

@@ -52,13 +52,20 @@ export default function TenantSettings(){
       if (gmailAppPassword && gmailAppPassword.length > 0) {
         payload.gmailAppPassword = gmailAppPassword
       }
-      await api.put(`/tenants/${id}`, payload)
+      // Use response to update local tenant state and masked password so UI reflects saved value
+      const res = await api.put(`/tenants/${id}`, payload)
+      const updated = res.data
+      if (updated) {
+        setTenant(updated)
+        setMaskedPassword(updated.gmailAppPasswordMasked || null)
+      }
       setMessage('Tenant settings updated')
       // clear the local password field after save
       setGmailAppPassword('')
-      // redirect to admin or login
+      // redirect to admin or login after brief pause
       setTimeout(() => navigate('/admin'), 1000)
     } catch (err) {
+      console.error('Failed to save tenant settings', err?.response || err)
       setMessage('Failed to save settings')
     }
   }

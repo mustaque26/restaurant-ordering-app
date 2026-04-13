@@ -13,4 +13,7 @@ public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
     // return all tenants (case-insensitive) for a given admin email so service can disambiguate
     List<Tenant> findByAdminEmailIgnoreCase(String email);
+
+    // find by slug (unique)
+    Tenant findBySlug(String slug);
 }

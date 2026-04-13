@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonProperty.Access;
 import com.axinq.restaurant.config.AttributeEncryptor;
 
 @Entity
@@ -33,18 +34,30 @@ public class Tenant {
     private boolean onboarded = false;
     private java.math.BigDecimal subscriptionAmount;
 
-    // New: store per-tenant Gmail App Password (store encrypted in production!)
-    @JsonIgnore
+    // Store per-tenant Gmail App Password (encrypted at rest). Make it write-only for JSON so callers can set it
     @Convert(converter = AttributeEncryptor.class)
     @Column(name = "gmail_app_password", length = 2048)
+    @JsonProperty(access = Access.WRITE_ONLY)
     private String gmailAppPassword;
 
     private Instant createdAt = Instant.now();
+
+    // New slug field to support friendly URLs (e.g., /my-cafe)
+    @Column(name = "slug", unique = true, length = 255)
+    private String slug;
+
+    // New: store payment QR image URL or path for tenant
+    @Column(name = "payment_qr_image_url", length = 1024)
+    private String paymentQrImageUrl;
 
     @PrePersist
     @PreUpdate
     private void updateDerivedFields() {
         if (this.adminEmail != null) this.adminEmailLower = this.adminEmail.toLowerCase();
+        // generate slug from name if not present
+        if ((this.slug == null || this.slug.isBlank()) && this.name != null && !this.name.isBlank()) {
+            this.slug = slugify(this.name);
+        }
     }
 
     public Tenant() {}
@@ -59,11 +72,23 @@ public class Tenant {
         updateDerivedFields();
     }
 
+    // simple slugify helper: lower-case, replace non-alphanumeric with hyphens, trim hyphens
+    private static String slugify(String s) {
+        if (s == null) return null;
+        String t = s.trim().toLowerCase();
+        // replace any sequence of non-alphanumeric characters with hyphen
+        t = t.replaceAll("[^a-z0-9]+", "-");
+        // trim leading/trailing hyphens
+        t = t.replaceAll("^-+|-+$", "");
+        if (t.isEmpty()) return null;
+        return t;
+    }
+
     // getters and setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setName(String name) { this.name = name; updateDerivedFields(); }
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public String getAdminEmail() { return adminEmail; }
@@ -80,11 +105,18 @@ public class Tenant {
     public java.math.BigDecimal getSubscriptionAmount() { return subscriptionAmount; }
     public void setSubscriptionAmount(java.math.BigDecimal subscriptionAmount) { this.subscriptionAmount = subscriptionAmount; }
 
-    // Raw password accessors (ignored in JSON). IMPORTANT: store encrypted in real deployments.
-    @JsonIgnore
+    // Gmail app password accessors: write-only via JSON
     public String getGmailAppPassword() { return gmailAppPassword; }
 
     public void setGmailAppPassword(String gmailAppPassword) { this.gmailAppPassword = gmailAppPassword; }
+
+    // expose slug
+    public String getSlug() { return slug; }
+    public void setSlug(String slug) { this.slug = slug; }
+
+    // Payment QR image URL (can be relative path or absolute URL)
+    public String getPaymentQrImageUrl() { return paymentQrImageUrl; }
+    public void setPaymentQrImageUrl(String paymentQrImageUrl) { this.paymentQrImageUrl = paymentQrImageUrl; }
 
     // Expose a masked version in API responses for UI (e.g. ****abcd)
     @JsonProperty("gmailAppPasswordMasked")

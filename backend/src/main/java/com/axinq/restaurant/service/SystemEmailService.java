@@ -50,11 +50,12 @@ public class SystemEmailService {
     private void sendText(JavaMailSender sender, String from, String toEmail, String subject, String body) {
         SimpleMailMessage message = new SimpleMailMessage();
         if (from != null && !from.isBlank()) message.setFrom(from);
+        else if (dizminuFrom != null && !dizminuFrom.isBlank()) message.setFrom(dizminuFrom);
         message.setTo(toEmail);
         message.setSubject(subject);
         message.setText(body);
         try {
-            String info = String.format("SystemEmail: sending from=%s to=%s subject=%s", from, toEmail, subject);
+            String info = String.format("SystemEmail: sending from=%s to=%s subject=%s", from != null && !from.isBlank() ? from : dizminuFrom, toEmail, subject);
             log.info(info);
             writeDebug(info, null);
             sender.send(message);
@@ -74,6 +75,7 @@ public class SystemEmailService {
             MimeMessage mime = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
             if (from != null && !from.isBlank()) helper.setFrom(from);
+            else if (dizminuFrom != null && !dizminuFrom.isBlank()) helper.setFrom(dizminuFrom);
             helper.setTo(toEmail);
             helper.setSubject(subject);
             // set HTML body
@@ -100,7 +102,7 @@ public class SystemEmailService {
                 log.debug("Logo not found or failed to attach inline", e);
             }
 
-            String info = String.format("SystemEmail(HTML): sending from=%s to=%s subject=%s", from, toEmail, subject);
+            String info = String.format("SystemEmail(HTML): sending from=%s to=%s subject=%s", from != null && !from.isBlank() ? from : dizminuFrom, toEmail, subject);
             log.info(info);
             writeDebug(info, null);
             sender.send(mime);
@@ -116,7 +118,25 @@ public class SystemEmailService {
     }
 
     public void sendFromDizminu(String toEmail, String subject, String body) {
-        sendText(dizminuSender, dizminuFrom, toEmail, subject, body);
+        sendText(dizminuSender, null, toEmail, subject, body);
+    }
+
+    /**
+     * Send from Dizminu sender but set the From header to the provided value when supplied.
+     * Useful as a fallback when tenant SMTP cannot be used but we still want the email to appear
+     * from the tenant's admin address.
+     */
+    public void sendFromDizminuTenant(String from, String toEmail, String subject, String body) {
+        sendText(dizminuSender, from, toEmail, subject, body);
+    }
+
+    // HTML sending helpers (public)
+    public void sendFromDizminuHtml(String toEmail, String subject, String htmlBody) {
+        sendHtml(dizminuSender, null, toEmail, subject, htmlBody);
+    }
+
+    public void sendFromDizminuTenantHtml(String from, String toEmail, String subject, String htmlBody) {
+        sendHtml(dizminuSender, from, toEmail, subject, htmlBody);
     }
 
     public void sendFromSales(String toEmail, String subject, String body) {

@@ -385,4 +385,11 @@ public class TenantController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/slug/{slug}")
+    public ResponseEntity<Tenant> getBySlug(@PathVariable String slug) {
+        Tenant t = tenantRepository.findBySlug(slug);
+        if (t == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(t);
+    }
+
 }

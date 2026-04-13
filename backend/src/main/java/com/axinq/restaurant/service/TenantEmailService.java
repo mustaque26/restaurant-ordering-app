@@ -2,13 +2,16 @@ package com.axinq.restaurant.service;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import jakarta.mail.internet.MimeMessage;
 import java.util.Properties;
 
 @Service
@@ -25,13 +28,7 @@ public class TenantEmailService {
     }
 
     /**
-     * Send an email where the From header is explicitly set to the tenant's admin email.
-     * If tenant app password is provided, attempt to use tenant SMTP credentials (Gmail) so the
-     * SMTP envelope comes from tenant's account. If that fails or password is missing, fall back
-     * to using the application's sales sender and set the From header to tenantFrom.
-     *
-     * Note: tenantPassword is sensitive and is never logged. In production, store the password
-     * encrypted or in a secrets manager.
+     * Plain-text send: try tenant SMTP then fall back to sales sender with From header set.
      */
     public void sendFromTenantAddress(String tenantFrom, String tenantPassword, String toEmail, String subject, String body) {
         // Try tenant SMTP if possible
@@ -79,6 +76,75 @@ public class TenantEmailService {
         } catch (Exception ex) {
             log.error("TenantEmail: failed to send to {} (subject={}) via sales sender", toEmail, subject, ex);
             throw ex;
+        }
+    }
+
+    /**
+     * HTML send using tenant SMTP (preferred). Fallback to sales sender with From header set.
+     */
+    public void sendFromTenantAddressHtml(String tenantFrom, String tenantPassword, String toEmail, String subject, String htmlBody) {
+        // Try tenant SMTP if possible
+        if (tenantPassword != null && !tenantPassword.isBlank() && tenantFrom != null && !tenantFrom.isBlank()) {
+            JavaMailSenderImpl tenantSender = new JavaMailSenderImpl();
+            tenantSender.setHost("smtp.gmail.com");
+            tenantSender.setPort(587);
+            tenantSender.setUsername(tenantFrom);
+            tenantSender.setPassword(tenantPassword);
+
+            Properties props = tenantSender.getJavaMailProperties();
+            props.put("mail.transport.protocol", "smtp");
+            props.put("mail.smtp.auth", "true");
+            props.put("mail.smtp.starttls.enable", "true");
+            props.put("mail.smtp.starttls.required", "true");
+            props.put("mail.debug", "false");
+
+            try {
+                MimeMessage mime = tenantSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+                helper.setFrom(tenantFrom);
+                helper.setTo(toEmail);
+                helper.setSubject(subject);
+                helper.setText(htmlBody, true);
+
+                // attach inline logo if available
+                try {
+                    ClassPathResource logo = new ClassPathResource("static/images/dizminuLogo.png");
+                    if (!logo.exists()) logo = new ClassPathResource("static/images/dizminu-logo.png");
+                    if (!logo.exists()) logo = new ClassPathResource("static/images/axinq-logo.png");
+                    if (logo.exists()) helper.addInline("dizminuLogo", logo);
+                } catch (Exception ignore) {}
+
+                log.info("TenantEmail(HTML): sending with tenant SMTP from={} to={} subject={}", tenantFrom, toEmail, subject);
+                tenantSender.send(mime);
+                log.info("TenantEmail(HTML): sent via tenant SMTP to={}", toEmail);
+                return;
+            } catch (Exception ex) {
+                log.warn("TenantEmail(HTML): failed via tenant SMTP for from={}; falling back to sales sender", tenantFrom, ex);
+            }
+        }
+
+        // Fallback to sales sender with From header set
+        try {
+            MimeMessage mime = salesSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+            if (tenantFrom != null && !tenantFrom.isBlank()) helper.setFrom(tenantFrom);
+            else helper.setFrom(salesFrom);
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(htmlBody, true);
+            try {
+                ClassPathResource logo = new ClassPathResource("static/images/dizminuLogo.png");
+                if (!logo.exists()) logo = new ClassPathResource("static/images/dizminu-logo.png");
+                if (!logo.exists()) logo = new ClassPathResource("static/images/axinq-logo.png");
+                if (logo.exists()) helper.addInline("dizminuLogo", logo);
+            } catch (Exception ignore) {}
+
+            log.info("TenantEmail(HTML): sending via sales sender from={} to={} subject={}", tenantFrom != null ? tenantFrom : salesFrom, toEmail, subject);
+            salesSender.send(mime);
+            log.info("TenantEmail(HTML): sent via sales sender to={}", toEmail);
+        } catch (Exception ex) {
+            log.error("TenantEmail(HTML): failed to send to {} (subject={}) via sales sender", toEmail, subject, ex);
+            throw new RuntimeException(ex);
         }
     }
 }

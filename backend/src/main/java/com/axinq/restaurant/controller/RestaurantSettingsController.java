@@ -21,10 +21,21 @@ public class RestaurantSettingsController {
         this.tenantAuthService = tenantAuthService;
     }
 
+    /**
+     * Return settings. Accepts optional tenantId as query param for public access.
+     * If tenantId is not provided, and Authorization header with tenant token is present,
+     * tenant id will be derived from the token.
+     */
     @GetMapping
-    public RestaurantSettings getSettings(@RequestHeader(value = "Authorization", required = false) String auth) {
-        Long tenantId = tenantAuthService.validateTokenHeader(auth);
-        return service.getSettings(tenantId);
+    public RestaurantSettings getSettings(@RequestHeader(value = "Authorization", required = false) String auth,
+                                         @RequestParam(value = "tenantId", required = false) Long tenantId) {
+        // prefer explicit tenantId query param for public pages
+        Long effectiveTenantId = tenantId;
+        if (effectiveTenantId == null) {
+            // fall back to token header (existing behavior)
+            effectiveTenantId = tenantAuthService.validateTokenHeader(auth);
+        }
+        return service.getSettings(effectiveTenantId);
     }
 
     @PutMapping("/payment-qr")

@@ -25,4 +25,8 @@ public class MenuItem {
 
     @Column(nullable = false)
     private boolean available;
+
+    // When null, the menu item is global (available to all tenants). When non-null, it belongs to a specific tenant.
+    @Column(name = "tenant_id")
+    private Long tenantId;
 }

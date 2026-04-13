@@ -10,5 +10,6 @@ public record MenuItemRequest(
         @NotNull BigDecimal price,
         @NotBlank String category,
         String imageUrl,
-        boolean available
+        boolean available,
+        Long tenantId
 ) {}

@@ -12,10 +12,14 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     private final OrderRepository orderRepository;
     private final MenuItemRepository menuItemRepository;
@@ -40,12 +44,25 @@ public class OrderService {
         List<OrderItem> orderItems = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
 
+        // determine tenantId: prefer explicit request.tenantId(), otherwise infer from menu items
+        Long tenantId = request.tenantId();
+        boolean tenantConflict = false;
+
         for (OrderItemRequest itemRequest : request.items()) {
             MenuItem menuItem = menuItemRepository.findById(itemRequest.menuItemId())
                     .orElseThrow(() -> new RuntimeException("Menu item not found: " + itemRequest.menuItemId()));
 
             if (!menuItem.isAvailable()) {
                 throw new RuntimeException("Item is currently unavailable: " + menuItem.getName());
+            }
+
+            // infer tenantId from menu item if request didn't provide one
+            Long itemTenant = menuItem.getTenantId();
+            if (tenantId == null && itemTenant != null) {
+                tenantId = itemTenant;
+            } else if (itemTenant != null && tenantId != null && !itemTenant.equals(tenantId)) {
+                // Items belong to different tenants - this is unexpected; mark conflict and null-out tenantId
+                tenantConflict = true;
             }
 
             BigDecimal lineTotal = menuItem.getPrice().multiply(BigDecimal.valueOf(itemRequest.quantity()));
@@ -61,6 +78,14 @@ public class OrderService {
 
             orderItems.add(orderItem);
             total = total.add(lineTotal);
+        }
+
+        if (tenantConflict) {
+            // For safety, don't attach a tenant when items belong to multiple tenants
+            log.warn("Order items reference multiple tenants; leaving order.tenantId null");
+            order.setTenantId(null);
+        } else {
+            order.setTenantId(tenantId);
         }
 
         order.setItems(orderItems);
