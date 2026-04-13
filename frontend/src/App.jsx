@@ -10,11 +10,13 @@ import SubscriptionPage from './pages/SubscriptionPage'
 import TenantSettings from './pages/TenantSettings'
 import { useEffect, useState } from 'react'
 import { getToken, clearToken as removeTokenLocal } from './tenantAuth'
+import api from './api'
 import AdminHome from './pages/AdminHome'
 import RequireAuth from './components/RequireAuth'
 import Error401 from './pages/Error401'
 import Error403 from './pages/Error403'
 import ErrorBoundary from './components/ErrorBoundary'
+import AccountMenu from './components/AccountMenu'
 
 // import the dizminu logo image placed in src/images
 import dizminuLogo from './images/dizminuLogo.png'
@@ -45,6 +47,9 @@ function HeaderLoginButton({ token, navigate }) {
 
 export default function App() {
   const [token, setToken] = useState(getToken())
+  const [tenantBadge, setTenantBadge] = useState('')
+  const [tenantName, setTenantName] = useState('')
+  const [tenantId, setTenantId] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -56,17 +61,48 @@ export default function App() {
   function logoutAndRedirect() {
     try { removeTokenLocal() } catch (e) {}
     setToken('')
+    setTenantBadge('')
+    setTenantName('')
     // send global event so other components update
     try { window.dispatchEvent(new Event('tenant-auth-changed')) } catch (e) {}
     // navigate to home
     try { navigate('/') } catch (e) {}
   }
 
+  // Fetch tenant info for header badge when token changes
+  useEffect(() => {
+    let mounted = true
+    const loadTenant = async () => {
+      if (!token) { if (mounted) setTenantBadge(''); return }
+      try {
+        const res = await api.get('/tenant-auth/me', { headers: { Authorization: `Bearer ${token}` } })
+        if (!mounted) return
+        const name = res?.data?.name || res?.data?.adminEmail || ''
+        // compute short badge (initials upto 2 chars) or fallback to first word
+        let badge = ''
+        if (name) {
+          const parts = String(name).trim().split(/\s+/).filter(Boolean)
+          if (parts.length === 1) badge = parts[0].slice(0,3).toUpperCase()
+          else badge = (parts[0][0] || '') + (parts[1][0] || '')
+          badge = badge.toUpperCase()
+        }
+        setTenantBadge(badge || '')
+        setTenantName(name || '')
+        setTenantId(res?.data?.id || null)
+      } catch (e) {
+        console.debug('Failed to fetch tenant for badge', e)
+        if (mounted) { setTenantBadge(''); setTenantName(''); setTenantId(null) }
+      }
+    }
+    loadTenant()
+    return () => { mounted = false }
+  }, [token])
+
   return (
     <CartProvider>
       <div>
         <header className="topbar">
-          <div className="nav topbar-container">
+          <div className="topbar-container">
             {/* brand: show icon (cropped) and render brand text outside the image for clarity */}
             <div className="brand">
               <div className="brand-image">
@@ -104,20 +140,24 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <nav>
+            <nav className="nav">
               {/* Always show subscription link; show Menu/Admin only when tenant is logged in */}
               {token ? <Link to="/menu">Menu</Link> : null}
               {/* show Home label only for non-logged-in users */}
               {!token && <Link to="/" className="nav-home">Home</Link>}
-              {/* If not logged in, show Login link; otherwise show Logout button */}
+              {/* If not logged in, show Login link */}
               {!token ? (
                 <Link to="/login" style={{marginLeft:12}}>Login</Link>
-              ) : (
-                <button onClick={logoutAndRedirect} className="header-btn secondary" style={{marginLeft:12}}>Logout</button>
-              )}
+              ) : null}
               <Link to="/subscriptions" style={{marginLeft:12}} aria-label="Subscriptions">Subscriptions</Link>
-              {token ? <Link to="/admin">Admin</Link> : null}
-             </nav>
+               {token ? <Link to="/admin">Add Item</Link> : null}
+            </nav>
+            {/* Render account menu as a sibling so it stays at the extreme right */}
+            {token ? (
+              <div className="nav-end">
+                <AccountMenu tenantBadge={tenantBadge} tenantName={tenantName} tenantId={tenantId} onLogout={logoutAndRedirect} />
+              </div>
+            ) : null}
            </div>
          </header>
 

@@ -269,6 +269,42 @@ export default function SubscriptionPage() {
         <p className="muted">Choose a plan that fits your restaurant. First month free.</p>
       </div>
 
+      {/* If user is logged in and tenantInfo exists, show existing subscription details with a simple timeline */}
+      {tenantInfo && (
+        <div className="card pad mb">
+          <h3>Your subscription</h3>
+          <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:18}}>{tenantInfo.name || 'Your Restaurant'}</div>
+              <div className="muted">Admin: {tenantInfo.adminEmail}</div>
+            </div>
+            <div style={{marginLeft:'auto',textAlign:'right'}}>
+              <div style={{fontSize:16,fontWeight:700}}>{tenantInfo.plan || '—'}</div>
+              <div className="muted">{tenantInfo.subscriptionAmount ? `₹${tenantInfo.subscriptionAmount}` : 'Amount: —'}</div>
+            </div>
+          </div>
+
+          <div style={{marginTop:12}}>
+            <h4 style={{marginBottom:8}}>Timeline</h4>
+            <ul className="timeline" style={{paddingLeft:16,margin:0}}>
+              <li style={{marginBottom:6}}><strong>Created:</strong> {tenantInfo.createdAt ? new Date(tenantInfo.createdAt).toLocaleString() : '—'}</li>
+              <li style={{marginBottom:6}}><strong>Plan:</strong> {tenantInfo.plan || '—'}</li>
+              <li style={{marginBottom:6}}><strong>Onboarded:</strong> {tenantInfo.onboarded ? 'Yes' : 'Pending'}</li>
+              {tenantInfo.gmailAppPasswordMasked ? (
+                <li style={{marginBottom:6}}><strong>Gmail SMTP:</strong> Stored ({tenantInfo.gmailAppPasswordMasked})</li>
+              ) : (
+                <li style={{marginBottom:6}}><strong>Gmail SMTP:</strong> Not configured</li>
+              )}
+            </ul>
+          </div>
+
+          <div style={{marginTop:12,display:'flex',gap:8}}>
+            <button onClick={() => { setMessage('To change your plan, contact support or create a new subscription.'); }} className="subscribe-btn">Manage / Upgrade</button>
+            <button onClick={() => { navigate('/admin') }} className="subscribe-btn">Open Admin</button>
+          </div>
+        </div>
+      )}
+
       {/* Subscription plans grid (Basic / Prime) */}
       <div className="subscription-grid" style={{marginTop:18}}>
         <div className={`sub-card ${selectedPlan === 'basic' ? 'selected' : ''}`}>

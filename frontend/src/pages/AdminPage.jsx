@@ -130,7 +130,6 @@ export default function AdminPage() {
     <div className="admin-page">
       {/* Auth panel */}
       <div className="card pad mb">
-        <h2>Tenant Login</h2>
         {message && <div className="message">{message}</div>}
         {step !== 2 ? (
           <div className="form-grid">
@@ -146,10 +145,7 @@ export default function AdminPage() {
             )}
           </div>
         ) : (
-          <div>
-            <div>Logged in as {email} {tenant?.name ? `- ${tenant.name}` : ''}</div>
-            <button onClick={logout}>Logout</button>
-          </div>
+          <div />
         )}
       </div>
 
