@@ -8,6 +8,48 @@ export default function RestaurantsList() {
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Map thumbnail component: shows image when it loads, otherwise shows a simple fallback link+icon
+  function MapThumb({ src, address, alt }) {
+    const [ok, setOk] = useState(false)
+    const [tried, setTried] = useState(false)
+
+    if (!address) return null
+
+    return (
+      <div style={{width:'100%'}}>
+        {src ? (
+          <img
+            src={src}
+            alt={alt}
+            className="map-thumb"
+            onLoad={() => { setOk(true); setTried(true) }}
+            onError={() => { setOk(false); setTried(true) }}
+            style={{display: ok ? 'block' : 'none'}}
+            onClick={(e)=>e.stopPropagation()}
+          />
+        ) : null}
+        {/* if image not available or failed, show compact 'View map' link instead of repeating the address */}
+        {(!ok && tried) || !src ? (
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e)=>{ e.stopPropagation() }}
+            className="map-link"
+            title={address}
+          >
+            {/* inline pin SVG */}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M12 2C8.686 2 6 4.686 6 8c0 4.5 6 12 6 12s6-7.5 6-12c0-3.314-2.686-6-6-6z" fill="#0b486b"/>
+              <circle cx="12" cy="8" r="2" fill="#fff"/>
+            </svg>
+            <span style={{fontSize:13, fontWeight:600, marginLeft:6}}>View map</span>
+          </a>
+        ) : null}
+      </div>
+    )
+  }
+
   useEffect(() => {
     let mounted = true
     api.get('/restaurants').then(res => {
@@ -96,8 +138,13 @@ export default function RestaurantsList() {
               const imgSrc = logoSrc(r.logoUrl)
               const address = r.address || ''
               const truncated = truncate(address, 70)
-              // Build a Google Static Maps thumbnail URL (no API key included; if you have a key add &key=YOUR_KEY)
-              const staticMapUrl = address ? `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=15&size=240x120&scale=1&markers=color:red|${encodeURIComponent(address)}` : null
+              // Build a Google Static Maps thumbnail URL. If a Vite env var VITE_GOOGLE_MAPS_KEY is set it will be appended.
+              const MAP_KEY = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_KEY) ? String(import.meta.env.VITE_GOOGLE_MAPS_KEY).trim() : ''
+              let staticMapUrl = null
+              if (address) {
+                const base = `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=15&size=240x120&scale=1&markers=color:red|${encodeURIComponent(address)}`
+                staticMapUrl = MAP_KEY ? `${base}&key=${MAP_KEY}` : base
+              }
 
               return (
                 <div key={r.id} className="restaurant-card card pad" style={{cursor:'pointer'}} onClick={() => navigate(`/base/${r.id}/${r.slug}`)}>
@@ -127,11 +174,11 @@ export default function RestaurantsList() {
                           <div className="muted" style={{fontSize:13}}>Not provided</div>
                         )}
                       </div>
-                      {staticMapUrl ? (
-                        <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noopener noreferrer" onClick={(e)=>e.stopPropagation()}>
-                          <img src={staticMapUrl} alt={`Map for ${r.name}`} className="map-thumb" onError={(e)=>{e.currentTarget.onerror=null; e.currentTarget.style.display='none'}}/>
-                        </a>
-                      ) : null}
+                      <MapThumb
+                        src={staticMapUrl}
+                        address={address}
+                        alt={`Map for ${r.name}`}
+                      />
                     </div>
 
                     {/* right column: name + description */}
