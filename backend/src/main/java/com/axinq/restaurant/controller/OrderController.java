@@ -3,6 +3,7 @@ package com.axinq.restaurant.controller;
 import com.axinq.restaurant.dto.CreateOrderRequest;
 import com.axinq.restaurant.dto.OrderResponse;
 import com.axinq.restaurant.model.Order;
+import com.axinq.restaurant.model.OrderItem;
 import com.axinq.restaurant.service.SystemEmailService;
 import com.axinq.restaurant.service.TenantEmailService;
 import com.axinq.restaurant.service.OrderService;
@@ -11,6 +12,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -167,7 +169,8 @@ public class OrderController {
         }
 
         var location = uriBuilder.path("/api/orders/{id}").buildAndExpand(saved.getId()).toUri();
-        return ResponseEntity.created(location).body(new OrderResponse(saved.getId()));
+        // Return the full saved order so clients can render details immediately (includes items)
+        return ResponseEntity.created(location).body(saved);
     }
 
     @GetMapping
@@ -178,6 +181,56 @@ public class OrderController {
     @GetMapping("/{id}")
     public Order getById(@PathVariable Long id) {
         return orderService.getOrder(id);
+    }
+
+    @GetMapping(value = "/{id}/receipt", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> getReceipt(@PathVariable Long id) {
+        try {
+            Order order = orderService.getOrder(id);
+            if (order == null) return ResponseEntity.notFound().build();
+
+            String tenantName = "Dizminu Restaurant";
+            Long tenantId = order.getTenantId();
+            if (tenantId != null) {
+                Tenant t = tenantRepository.findById(tenantId).orElse(null);
+                if (t != null && t.getName() != null && !t.getName().isBlank()) tenantName = t.getName();
+            }
+
+            StringBuilder itemsTable = new StringBuilder();
+            itemsTable.append("<table style='width:100%;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;'>");
+            itemsTable.append("<thead><tr style='background:#f6f8fa;text-align:left;'><th style='padding:8px;border-bottom:1px solid #eaeaea;'>Item</th><th style='padding:8px;border-bottom:1px solid #eaeaea;'>Qty</th><th style='padding:8px;border-bottom:1px solid #eaeaea;'>Price</th><th style='padding:8px;border-bottom:1px solid #eaeaea;'>Total</th></tr></thead><tbody>");
+            if (order.getItems() != null) {
+                for (OrderItem it : order.getItems()) {
+                    itemsTable.append("<tr>")
+                            .append("<td style='padding:8px;border-bottom:1px solid #f1f1f1;'>" + escapeHtml(it.getItemName()) + "</td>")
+                            .append("<td style='padding:8px;border-bottom:1px solid #f1f1f1;'>" + it.getQuantity() + "</td>")
+                            .append("<td style='padding:8px;border-bottom:1px solid #f1f1f1;'>₹" + it.getPrice() + "</td>")
+                            .append("<td style='padding:8px;border-bottom:1px solid #f1f1f1;'>₹" + it.getLineTotal() + "</td>")
+                            .append("</tr>");
+                }
+            }
+            itemsTable.append("</tbody></table>");
+
+            String html = "<html><head><meta charset='utf-8'><title>Receipt - " + escapeHtml(tenantName) + "</title></head><body style='font-family:Arial,Helvetica,sans-serif;color:#222;'>" +
+                    "<div style='max-width:720px;margin:0 auto;padding:18px;'>" +
+                    "<div style='display:flex;align-items:center;gap:12px;'><div style='font-size:20px;font-weight:700;color:#0b486b;'>" + escapeHtml(tenantName) + "</div></div>" +
+                    "<hr style='border:none;border-top:1px solid #eee;margin:12px 0;' />" +
+                    "<p>Order ID: <strong>" + order.getId() + "</strong></p>" +
+                    itemsTable.toString() +
+                    "<div style='text-align:right;margin-top:12px;font-size:16px;font-weight:700;'>Total: ₹" + (order.getTotalAmount() != null ? order.getTotalAmount().toString() : "0.00") + "</div>" +
+                    "<div style='margin-top:18px;'>" +
+                    "<div><strong>Customer:</strong> " + escapeHtml(order.getCustomerName()) + "</div>" +
+                    "<div><strong>Address:</strong> " + escapeHtml(order.getDeliveryAddress()) + "</div>" +
+                    "<div><strong>Phone:</strong> " + escapeHtml(order.getPhoneNumber()) + "</div>" +
+                    (order.getPaymentReference() != null ? "<div><strong>Payment Ref:</strong> " + escapeHtml(order.getPaymentReference()) + "</div>" : "") +
+                    "</div>" +
+                    "</div></body></html>";
+
+            return ResponseEntity.ok(html);
+        } catch (Exception ex) {
+            log.error("Failed to build receipt for order {}", id, ex);
+            return ResponseEntity.status(500).body("<html><body><h3>Unable to generate receipt</h3></body></html>");
+        }
     }
 
     // minimal HTML-escaping helper

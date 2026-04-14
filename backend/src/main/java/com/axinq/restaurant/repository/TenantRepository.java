@@ -16,4 +16,7 @@ public interface TenantRepository extends JpaRepository<Tenant, Long> {
 
     // find by slug (unique)
     Tenant findBySlug(String slug);
+
+    // return only tenants that are onboarded (publicly visible restaurants)
+    List<Tenant> findByOnboardedTrue();
 }

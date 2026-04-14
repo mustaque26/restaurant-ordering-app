@@ -17,6 +17,7 @@ import Error401 from './pages/Error401'
 import Error403 from './pages/Error403'
 import ErrorBoundary from './components/ErrorBoundary'
 import AccountMenu from './components/AccountMenu'
+import RestaurantsList from './pages/RestaurantsList'
 
 // import the dizminu logo image placed in src/images
 import dizminuLogo from './images/dizminuLogo.png'
@@ -140,18 +141,20 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <nav className="nav">
-              {/* Always show subscription link; show Menu/Admin only when tenant is logged in */}
-              {token ? <Link to="/menu">Menu</Link> : null}
-              {/* show Home label only for non-logged-in users */}
-              {!token && <Link to="/" className="nav-home">Home</Link>}
-              {/* If not logged in, show Login link */}
-              {!token ? (
-                <Link to="/login" style={{marginLeft:12}}>Login</Link>
-              ) : null}
-              <Link to="/subscriptions" style={{marginLeft:12}} aria-label="Subscriptions">Subscriptions</Link>
-               {token ? <Link to="/admin">Add Item</Link> : null}
-            </nav>
+            <div style={{display:'flex', alignItems:'center', marginLeft:'auto'}}>
+              <nav className="nav" style={{display:'flex', gap:20}}>
+                {/* Always show public restaurants list */}
+                <Link to="/restaurants" className="nav-link">Restaurants</Link>
+                {/* show Home label only for non-logged-in users */}
+                {!token && <Link to="/" className="nav-home nav-link">Home</Link>}
+                {/* If not logged in, show Login link */}
+                {!token ? (
+                  <Link to="/login" className="nav-link">Login</Link>
+                ) : null}
+                <Link to="/subscriptions" className="nav-link">Subscriptions</Link>
+                {token ? <Link to="/admin" className="nav-link">Add Item</Link> : null}
+              </nav>
+            </div>
             {/* Render account menu as a sibling so it stays at the extreme right */}
             {token ? (
               <div className="nav-end">
@@ -168,8 +171,11 @@ export default function App() {
             <Route path="/" element={token ? <Navigate to="/menu" replace /> : <HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/subscriptions" element={<SubscriptionPage />} />
+            <Route path="/restaurants" element={<RestaurantsList />} />
             {/* Token-based tenant landing: /<token>/<restaurant-name> */}
             <Route path="/:token/:restaurant" element={<MenuPage />} />
+            {/* Public restaurant link when clicked from Home: /base/{id}/{slug} */}
+            <Route path="/base/:id/:restaurant" element={<MenuPage />} />
             <Route path="/menu" element={<MenuPage />} />
             <Route path="/:id/:restaurant/admin" element={<RequireAuth><TenantSettings /></RequireAuth>} />
             {/* Tenant setup link should be public so emailed setup token works for onboarding */}

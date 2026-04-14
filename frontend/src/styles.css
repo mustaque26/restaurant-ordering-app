@@ -780,3 +780,23 @@ input, textarea, select {
   .nav { padding-right: 64px }
   .nav-end { right: 8px }
 }
+
+/* Restaurant list address styling */
+.restaurant-address {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: #0b486b; /* dark blue for good contrast on white cards and visible on dark backgrounds */
+  font-size: 13px;
+  font-weight: 500;
+}
+.restaurant-address svg { flex-shrink: 0 }
+
+/* Restaurant card map thumbnail */
+.restaurant-card { display: block }
+.restaurant-card .map-thumb { width: 100%; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 6px 18px rgba(2,6,23,0.04); }
+
+@media (min-width: 980px) {
+  .restaurant-card { padding: 16px }
+}

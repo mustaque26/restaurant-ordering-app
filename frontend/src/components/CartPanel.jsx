@@ -51,8 +51,8 @@ export default function CartPanel({ qrImageUrl, tenantId = null }) {
 
   const placeOrder = async () => {
     setError('')
-    if (!customerName || !phoneNumber || !deliveryAddress) {
-      setError('Please fill customer name, phone number and address.')
+    if (!customerName || !deliveryAddress) {
+      setError('Please fill customer name and address.')
       return
     }
     if (items.length === 0) {
@@ -106,7 +106,15 @@ export default function CartPanel({ qrImageUrl, tenantId = null }) {
       }
 
       if (orderId) {
-        navigate(`/order-success/${orderId}`)
+        // Fetch full order details and pass via navigation state so the OrderSuccess page can show items
+        try {
+          const orderRes = await api.get(`/orders/${orderId}`)
+          const orderObj = orderRes?.data
+          navigate(`/order-success/${orderId}`, { state: { order: orderObj } })
+        } catch (e) {
+          // fallback to old behavior if fetch fails
+          navigate(`/order-success/${orderId}`)
+        }
       } else {
         setError('Order placed but server did not return an order id.')
       }

@@ -3,6 +3,7 @@ package com.axinq.restaurant.model;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
 @Table(name = "order_items")
@@ -25,5 +26,6 @@ public class OrderItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
+    @JsonBackReference
     private Order order;
 }

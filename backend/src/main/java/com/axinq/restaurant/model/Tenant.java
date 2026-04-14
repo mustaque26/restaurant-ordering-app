@@ -50,6 +50,10 @@ public class Tenant {
     @Column(name = "payment_qr_image_url", length = 1024)
     private String paymentQrImageUrl;
 
+    // Optional physical address for the restaurant
+    @Column(name = "address", length = 1024)
+    private String address;
+
     @PrePersist
     @PreUpdate
     private void updateDerivedFields() {
@@ -117,6 +121,9 @@ public class Tenant {
     // Payment QR image URL (can be relative path or absolute URL)
     public String getPaymentQrImageUrl() { return paymentQrImageUrl; }
     public void setPaymentQrImageUrl(String paymentQrImageUrl) { this.paymentQrImageUrl = paymentQrImageUrl; }
+
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
 
     // Expose a masked version in API responses for UI (e.g. ****abcd)
     @JsonProperty("gmailAppPasswordMasked")

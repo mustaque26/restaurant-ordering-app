@@ -99,7 +99,10 @@ public class OrderService {
     }
 
     public Order getOrder(Long id) {
-        return orderRepository.findById(id)
+        Order o = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found: " + id));
+        // Initialize lazy collection to ensure JSON serialization includes items
+        if (o.getItems() != null) o.getItems().size();
+        return o;
     }
 }

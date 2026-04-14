@@ -355,6 +355,7 @@ public class TenantController {
             if (incoming.getAdminEmail() != null) t.setAdminEmail(incoming.getAdminEmail());
             if (incoming.getPlan() != null) t.setPlan(incoming.getPlan());
             if (incoming.getSubscriptionAmount() != null) t.setSubscriptionAmount(incoming.getSubscriptionAmount());
+            if (incoming.getAddress() != null) t.setAddress(incoming.getAddress());
             // allow updating gmail app password (incoming password is ignored in JSON output due to @JsonIgnore)
             if (incoming.getGmailAppPassword() != null) t.setGmailAppPassword(incoming.getGmailAppPassword());
             tenantRepository.save(t);

@@ -1,8 +1,24 @@
 import { useNavigate } from 'react-router-dom'
 import dizminuLogo from '../images/dizminuLogo.png'
+import { useEffect, useState } from 'react'
+import api from '../api'
 
 export default function HomePage() {
   const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    api.get('/restaurants').then(res => {
+      if (!mounted) return
+      setLoading(false)
+    }).catch(e => {
+      console.debug('failed to load restaurants', e)
+      if (mounted) setLoading(false)
+    })
+    return () => { mounted = false }
+  }, [])
+
   return (
     <div>
       <div className="home-hero card pad mb">
@@ -16,6 +32,8 @@ export default function HomePage() {
           <button className="subscribe-btn" style={{marginLeft:8,background:'#ffffff',color:'#071027'}} onClick={() => { const el = document.getElementById('features'); if (el) el.scrollIntoView({behavior:'smooth'}); }}>See Demo</button>
         </div>
       </div>
+
+      {/* Restaurants list moved to /restaurants page */}
 
       <div id="benefits" className="card pad mb">
         <h3>Key benefits</h3>
