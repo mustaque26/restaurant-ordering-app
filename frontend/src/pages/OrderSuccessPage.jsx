@@ -78,7 +78,41 @@ export default function OrderSuccessPage() {
 
       <div style={{marginTop:18,display:'flex',gap:12}}>
         <Link to="/" className="subscribe-btn">Back to Menu</Link>
-        <a className="subscribe-btn" href={`/api/orders/${order.id}/receipt`} target="_blank" rel="noreferrer">Download Receipt</a>
+        <button
+          className="subscribe-btn"
+          onClick={async () => {
+            try {
+              const resp = await fetch(`/api/orders/${order.id}/receipt.pdf`, { method: 'GET' })
+              if (!resp.ok) {
+                console.error('Failed to download receipt', resp.status)
+                alert('Unable to download receipt at the moment')
+                return
+              }
+
+              const contentType = resp.headers.get('content-type') || ''
+              // Validate server actually returned a PDF; otherwise read body and show message
+              if (!contentType.includes('application/pdf')) {
+                const text = await resp.text()
+                console.error('Receipt download returned non-PDF response:', contentType, text)
+                alert('Server did not return a PDF when downloading the receipt. See console for details.')
+                return
+              }
+
+              const blob = await resp.blob()
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `receipt-${order.id}.pdf`
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+              URL.revokeObjectURL(url)
+            } catch (err) {
+              console.error('Error fetching receipt PDF', err)
+              alert('Error downloading receipt')
+            }
+          }}
+        >Download Receipt</button>
       </div>
     </div>
   )

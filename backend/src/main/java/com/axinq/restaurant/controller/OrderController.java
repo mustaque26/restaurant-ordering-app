@@ -1,7 +1,6 @@
 package com.axinq.restaurant.controller;
 
 import com.axinq.restaurant.dto.CreateOrderRequest;
-import com.axinq.restaurant.dto.OrderResponse;
 import com.axinq.restaurant.model.Order;
 import com.axinq.restaurant.model.OrderItem;
 import com.axinq.restaurant.service.SystemEmailService;
@@ -20,6 +19,14 @@ import com.axinq.restaurant.repository.TenantRepository;
 import com.axinq.restaurant.model.Tenant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import java.io.ByteArrayOutputStream;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -230,6 +237,140 @@ public class OrderController {
         } catch (Exception ex) {
             log.error("Failed to build receipt for order {}", id, ex);
             return ResponseEntity.status(500).body("<html><body><h3>Unable to generate receipt</h3></body></html>");
+        }
+    }
+
+    // New endpoint: return a PDF version of the receipt
+    @GetMapping(value = "/{id}/receipt.pdf", produces = "application/pdf")
+    public ResponseEntity<byte[]> getReceiptPdf(@PathVariable Long id) {
+        Order order = orderService.getOrder(id);
+        if (order == null) return ResponseEntity.notFound().build();
+        try {
+            ResponseEntity<String> htmlResp = getReceipt(id);
+            if (!htmlResp.getStatusCode().is2xxSuccessful() || htmlResp.getBody() == null) {
+                return ResponseEntity.status(htmlResp.getStatusCode()).build();
+            }
+            String html = htmlResp.getBody();
+
+            // Remove CID or unsupported image references which OpenHTMLToPDF can't resolve
+            html = html.replaceAll("(?i)<img[^>]*src\\s*=\\s*\"cid:[^\"]*\"[^>]*>", "");
+
+            // Ensure we have a full HTML document for the renderer
+            if (!html.toLowerCase().contains("<html")) {
+                html = "<html><head><meta charset='utf-8'><style>body{font-family:Arial,Helvetica,sans-serif;color:#222}</style></head><body>" + html + "</body></html>";
+            }
+
+            // First attempt: Convert HTML to PDF using OpenHTMLToPDF
+            try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
+                PdfRendererBuilder builder = new PdfRendererBuilder();
+                builder.useFastMode();
+                builder.withHtmlContent(html, null);
+                builder.toStream(os);
+                builder.run();
+                byte[] pdf = os.toByteArray();
+
+                if (pdf != null && pdf.length > 0) {
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+                    // ensure Content-Length is provided for clients
+                    headers.setContentLength(pdf.length);
+                    headers.add("Content-Disposition", "attachment; filename=\"receipt-" + id + ".pdf\"");
+                    log.info("OpenHTMLToPDF generated {} bytes for order {}", pdf.length, id);
+                    return ResponseEntity.ok().headers(headers).body(pdf);
+                }
+                // else fall through to PDFBox fallback
+                log.warn("OpenHTMLToPDF produced empty PDF for order {}. Falling back to text-based PDF.", id);
+            } catch (Exception ex) {
+                log.warn("OpenHTMLToPDF conversion failed for order {}, falling back to PDFBox: {}", id, ex.toString());
+            }
+
+            // Fallback: create a simple text PDF using PDFBox
+            try (PDDocument doc = new PDDocument()) {
+                PDPage page = new PDPage(PDRectangle.LETTER);
+                doc.addPage(page);
+                try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
+                    cs.beginText();
+                    cs.setFont(PDType1Font.HELVETICA_BOLD, 14);
+                    cs.newLineAtOffset(50, 720);
+                    String tenantName = "Dizminu Restaurant";
+                    Long tenantId = order.getTenantId();
+                    if (tenantId != null) {
+                        Tenant t = tenantRepository.findById(tenantId).orElse(null);
+                        if (t != null && t.getName() != null && !t.getName().isBlank()) tenantName = t.getName();
+                    }
+                    cs.showText("Receipt - " + tenantName);
+                    cs.newLineAtOffset(0, -20);
+                    cs.setFont(PDType1Font.HELVETICA, 12);
+                    cs.showText("Order ID: " + order.getId());
+                    cs.newLineAtOffset(0, -16);
+                    cs.showText("Customer: " + (order.getCustomerName() == null ? "" : order.getCustomerName()));
+                    cs.newLineAtOffset(0, -16);
+                    cs.showText("Address: " + (order.getDeliveryAddress() == null ? "" : order.getDeliveryAddress()));
+                    cs.newLineAtOffset(0, -20);
+
+                    // Items
+                    cs.setFont(PDType1Font.HELVETICA_BOLD, 12);
+                    cs.showText("Items:");
+                    cs.newLineAtOffset(0, -16);
+                    cs.setFont(PDType1Font.HELVETICA, 11);
+                    if (order.getItems() != null) {
+                        for (OrderItem it : order.getItems()) {
+                            String line = String.format("%s x%d  ₹%s", it.getItemName(), it.getQuantity(), it.getLineTotal());
+                            cs.showText(line);
+                            cs.newLineAtOffset(0, -14);
+                        }
+                    }
+                    cs.newLineAtOffset(0, -8);
+                    cs.setFont(PDType1Font.HELVETICA_BOLD, 12);
+                    cs.showText("Total: ₹" + (order.getTotalAmount() == null ? "0.00" : order.getTotalAmount().toString()));
+                    cs.endText();
+                }
+                try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                    doc.save(baos);
+                    byte[] pdfBytes = baos.toByteArray();
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+                    headers.setContentLength(pdfBytes.length);
+                    headers.add("Content-Disposition", "attachment; filename=\"receipt-" + id + ".pdf\"");
+                    log.info("PDFBox fallback generated {} bytes for order {}", pdfBytes.length, id);
+                    return ResponseEntity.ok().headers(headers).body(pdfBytes);
+                }
+            }
+
+        } catch (Exception ex) {
+            log.error("Failed to generate PDF receipt for order {}", id, ex);
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @GetMapping(value = "/testpdf", produces = "application/pdf")
+    public ResponseEntity<byte[]> getTestPdf() {
+        try (PDDocument doc = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            doc.addPage(page);
+            try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
+                cs.beginText();
+                cs.setFont(PDType1Font.HELVETICA_BOLD, 20);
+                cs.newLineAtOffset(50, 700);
+                cs.showText("Dizminu - Test PDF");
+                cs.newLineAtOffset(0, -30);
+                cs.setFont(PDType1Font.HELVETICA, 12);
+                cs.showText("This is a diagnostic PDF generated by the server.");
+                cs.endText();
+            }
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                doc.save(baos);
+                byte[] pdfBytes = baos.toByteArray();
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(org.springframework.http.MediaType.APPLICATION_PDF);
+                headers.setContentLength(pdfBytes.length);
+                headers.add("Content-Disposition", "attachment; filename=\"test.pdf\"");
+                log.info("Generated diagnostic test PDF of {} bytes", pdfBytes.length);
+                return ResponseEntity.ok().headers(headers).body(pdfBytes);
+            }
+        } catch (Exception e) {
+            log.error("Failed to generate diagnostic PDF", e);
+            return ResponseEntity.status(500).body(null);
         }
     }
 

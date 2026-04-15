@@ -13,12 +13,12 @@ export default function SubscriptionPage() {
 
   // Tenant/forms state
   const [tenantForms, setTenantForms] = useState({
-    basic: { name: '', logo: '', email: '' },
-    prime: { name: '', logo: '', email: '' }
+    basic: { name: '', logo: '', email: '', address: '' },
+    prime: { name: '', logo: '', email: '', address: '' }
   })
   const [tenantErrors, setTenantErrors] = useState({
-    basic: { name: '', email: '' },
-    prime: { name: '', email: '' }
+    basic: { name: '', email: '', address: '' },
+    prime: { name: '', email: '', address: '' }
   })
 
   // UI state
@@ -29,6 +29,8 @@ export default function SubscriptionPage() {
   const [tenantInfo, setTenantInfo] = useState(null)
   const [showTenantForm, setShowTenantForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // recently created tenant response (used to show success card with details + email note)
+  const [createdTenantResp, setCreatedTenantResp] = useState(null)
 
   // Login fields
   const [loginEmail, setLoginEmail] = useState('')
@@ -186,7 +188,7 @@ export default function SubscriptionPage() {
       return
     }
     const planKey = selectedPlan === 'basic' ? 'basic' : 'prime'
-    const { name, email, logo } = tenantForms[planKey]
+    const { name, email, logo, address } = tenantForms[planKey]
     const okName = validateField(planKey, 'name')
     const okEmail = validateField(planKey, 'email')
     if (!okName || !okEmail) {
@@ -200,17 +202,24 @@ export default function SubscriptionPage() {
         name: name.trim(),
         logoUrl: logo?.trim() || '',
         adminEmail: email.trim(),
+        address: address?.trim() || '',
         plan: selectedPlan.toUpperCase(),
         featuresJson: JSON.stringify(features)
       }
       // api.baseURL already contains '/api', so use '/tenants' to avoid double '/api/api'
       const res = await api.post('/tenants', payload, { headers: authHeaders() })
-      const saved = res.data
-      setMessage('Tenant created successfully. Check the admin email for details.')
-      setTenantForms(prev => ({ ...prev, [planKey]: { name: '', logo: '', email: '' } }))
+      // backend returns { tenant: {...}, setupToken: '...' } (or older response may be tenant directly)
+      const data = res.data || {}
+      const tenant = data.tenant || data
+      const setupToken = data.setupToken || null
+
+      // Show a detailed success card with subscription details and a note about the email
+      setCreatedTenantResp({ tenant, setupToken })
+      setMessage('')
+      setTenantForms(prev => ({ ...prev, [planKey]: { name: '', logo: '', email: '', address: '' } }))
       setShowTenantForm(false)
       setSelectedPlan(null)
-      try { trackEvent('subscription_created', { tenantId: saved.id, plan: selectedPlan }) } catch (e) {}
+      try { trackEvent('subscription_created', { tenantId: tenant?.id || null, plan: selectedPlan }) } catch (e) {}
     } catch (err) {
       // If backend returns 409 with existing tenants, show actionable message
       const status = err?.response?.status
@@ -239,6 +248,28 @@ export default function SubscriptionPage() {
 
   return (
     <div className="subscription-page">
+      {/* Success card shown right after successful subscription creation */}
+      {createdTenantResp && createdTenantResp.tenant && (
+        <div className="card pad mb success-card" style={{borderLeft:'4px solid #0b486b'}}>
+          <h3 style={{marginTop:0}}>Tenant created successfully</h3>
+          <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:18}}>{createdTenantResp.tenant.name || '—'}</div>
+              <div className="muted">Admin: {createdTenantResp.tenant.adminEmail || '—'}</div>
+              {createdTenantResp.tenant.address ? <div className="muted">Address: {createdTenantResp.tenant.address}</div> : null}
+            </div>
+            <div style={{marginLeft:'auto',textAlign:'right'}}>
+              <div style={{fontSize:16,fontWeight:700}}>{createdTenantResp.tenant.plan || '—'}</div>
+              <div className="muted">{createdTenantResp.tenant.subscriptionAmount ? `₹${createdTenantResp.tenant.subscriptionAmount}` : 'Amount: —'}</div>
+            </div>
+          </div>
+          <div style={{marginTop:12}}>
+            <p style={{margin:0}}>We have sent an onboarding email to <strong>{createdTenantResp.tenant.adminEmail}</strong>. Please open the email and click the <strong>Complete setup</strong> link to finish configuration (you may need to check your spam folder).</p>
+            <p style={{marginTop:8}} className="muted">If you didn't receive the email within a few minutes, contact support@dizminu.com or try resending from the admin dashboard.</p>
+          </div>
+        </div>
+      )}
+
       {/* Billing modal */}
       {showBillingModal && (
         <div className="modal-overlay" onClick={closeBillingModal}>
@@ -364,6 +395,11 @@ export default function SubscriptionPage() {
               <input placeholder="Logo URL (optional)" value={tenantForms[selectedPlan].logo} onChange={(e) => setTenantField(selectedPlan,'logo',e.target.value)} />
               <input placeholder="Admin email" value={tenantForms[selectedPlan].email} onChange={(e) => setTenantField(selectedPlan,'email',e.target.value)} onBlur={() => validateField(selectedPlan,'email')} />
               {tenantErrors[selectedPlan].email && <div className="field-error">{tenantErrors[selectedPlan].email}</div>}
+
+              {/* New address field */}
+              <input placeholder="Restaurant address (optional)" value={tenantForms[selectedPlan].address} onChange={(e) => setTenantField(selectedPlan,'address',e.target.value)} />
+              {tenantErrors[selectedPlan].address && <div className="field-error">{tenantErrors[selectedPlan].address}</div>}
+
               <div style={{marginTop:12}}>
                 <button onClick={submitSubscription} disabled={submitting || !tenantForms[selectedPlan].name || !tenantForms[selectedPlan].email} className="subscribe-btn">{submitting ? 'Submitting...' : `Submit & Create Tenant (${selectedPlan ? selectedPlan.toUpperCase() : ''})`}</button>
               </div>

@@ -44,8 +44,10 @@ export default function AccountMenu({ tenantBadge, tenantName, tenantId, onLogou
   useEffect(() => {
     if (open && rootRef.current) {
       const rect = rootRef.current.getBoundingClientRect()
-      // position dropdown slightly overlapping the button to prevent small hover gaps
-      setDropdownStyle({ top: rect.bottom + window.scrollY - HOVER_PAD, left: rect.left + window.scrollX })
+      // compute center x of the button; we'll center the dropdown on this point
+      const centerX = rect.left + rect.width / 2 + window.scrollX
+      const top = rect.bottom + window.scrollY + 8 // small gap
+      setDropdownStyle({ top, centerX })
     } else {
       setDropdownStyle(null)
     }
@@ -140,22 +142,47 @@ export default function AccountMenu({ tenantBadge, tenantName, tenantId, onLogou
     }
   }, [open])
 
+  // Render dropdown centered under the account button. After mount, clamp left so it stays within viewport.
   const dropdownNode = open && dropdownStyle ? createPortal(
     <div
       ref={dropdownRef}
       className="account-dropdown"
       role="menu"
-      style={{ position: 'absolute', top: dropdownStyle.top + 'px', left: dropdownStyle.left + 'px' }}
+      style={{ position: 'absolute', top: dropdownStyle.top + 'px', left: dropdownStyle.centerX + 'px', transform: 'translateX(-50%) translateY(6px)' }}
       onPointerEnter={handleDropdownPointerEnter}
       onPointerLeave={handleDropdownPointerLeave}
     >
       <Link to="/menu" className="account-item" role="menuitem" onClick={() => setOpen(false)}>Open Menu</Link>
       <Link to={tenantAdminUrl} className="account-item" role="menuitem" onClick={() => setOpen(false)}>Tenant Settings</Link>
+      {/* Add Item for admins (moved from header) */}
+      <Link to="/admin" className="account-item" role="menuitem" onClick={() => setOpen(false)}>Add Item</Link>
       <Link to="/subscriptions" className="account-item" role="menuitem" onClick={() => setOpen(false)}>Subscriptions</Link>
-      <button className="account-item" role="menuitem" onClick={() => { setOpen(false); onLogout && onLogout(); }}>Logout</button>
+      <div
+        className="account-item account-action"
+        role="menuitem"
+        tabIndex={0}
+        onClick={() => { setOpen(false); onLogout && onLogout(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setOpen(false); onLogout && onLogout(); } }}
+      >Logout</div>
     </div>,
     document.body
   ) : null
+
+  // After the dropdown mounts, measure and clamp to viewport so it doesn't overflow edges
+  useEffect(() => {
+    if (!open || !dropdownRef.current) return
+    const el = dropdownRef.current
+    const rect = el.getBoundingClientRect()
+    const half = rect.width / 2
+    const minLeft = half + 8
+    const maxLeft = window.innerWidth - half - 8
+    let desired = dropdownStyle?.centerX || 0
+    if (desired < minLeft) desired = minLeft
+    if (desired > maxLeft) desired = maxLeft
+    // update inline style to clamped value
+    el.style.left = desired + 'px'
+    el.style.transform = 'translateX(-50%) translateY(6px)'
+  }, [open, dropdownStyle])
 
   return (
     <div
@@ -168,8 +195,8 @@ export default function AccountMenu({ tenantBadge, tenantName, tenantId, onLogou
         className="account-btn"
         aria-haspopup="true"
         aria-expanded={open}
+        aria-label={tenantName ? `${tenantName} account` : 'Account menu'}
         onClick={() => setOpen(o => !o)}
-        title={tenantName || 'Account'}
         type="button"
       >
         {tenantBadge ? <span className="tenant-badge">{tenantBadge}</span> : null}

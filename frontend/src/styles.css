@@ -1,3 +1,120 @@
+/* Global modern UI/UX theme and reset - added to unify the frontend look */
+:root {
+  /* Primary palette */
+  --bg: #0f1724; /* very dark navy for chrome */
+  --page-bg: #f7fafc; /* light page background */
+  --card-bg: #ffffff;
+  --muted: #6b7280;
+
+  --accent-start: #0ea5e9;
+  --accent-end: #28c76f;
+  --accent: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+
+  --text: #071027;
+  --subtle: rgba(2,6,23,0.04);
+  --border: #e6eef6;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+
+  --shadow-1: 0 6px 18px rgba(2,6,23,0.07);
+  --shadow-2: 0 12px 36px rgba(2,6,23,0.08);
+}
+
+/* Base reset and typography */
+* { box-sizing: border-box }
+html,body,#root { height:100% }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  background: var(--page-bg);
+  color: var(--text);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  line-height:1.45;
+  font-size:15px;
+}
+
+a { color: var(--accent-start); text-decoration: none }
+a:hover { text-decoration: underline }
+
+/* Containers */
+.container { max-width:1200px; margin: 0 auto; padding: 24px }
+.header-container { display:flex; align-items:center; gap:16px; padding:18px 24px; background: linear-gradient(90deg,#071427,#071427); }
+.header-brand { display:flex; align-items:center; gap:12px }
+.header-nav { margin-left:auto; display:flex; gap:18px; align-items:center }
+.header-nav a { color: rgba(255,255,255,0.95); font-weight:700 }
+.header-nav .nav-home { font-size:22px }
+
+/* Hero */
+.hero { padding:28px; border-radius:var(--radius); background: linear-gradient(90deg,#071027,#0b1b2f); color: #fff; margin-bottom:18px }
+.hero h1 { margin:0; font-size:32px; font-weight:800 }
+.hero p { margin:6px 0 0; color: rgba(255,255,255,0.9) }
+
+/* Cards */
+.card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow-1); border: 1px solid var(--subtle); }
+.card.pad { padding:18px }
+.card:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); transition: all 180ms ease }
+
+/* Restaurants grid */
+.grid { display:grid; gap:16px }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr) }
+.grid.auto { grid-template-columns: repeat(auto-fit, minmax(240px,1fr)) }
+
+/* Restaurant card specific */
+.restaurant-card { display:flex; gap:16px; align-items:flex-start; padding:16px; border-radius:12px }
+.restaurant-card img { border-radius:10px }
+.restaurant-info { flex:1 }
+.restaurant-title { font-size:18px; font-weight:800; margin-bottom:4px }
+.restaurant-desc { color:var(--muted); font-size:13px }
+.restaurant-meta { display:flex; gap:12px; align-items:center; margin-top:8px }
+.restaurant-address { color: var(--muted); font-weight:600; font-size:13px }
+
+/* Map thumbnail styling */
+.map-thumb { width:100%; height:72px; object-fit:cover; border-radius:8px; border: 1px solid rgba(2,6,23,0.06) }
+.map-link { display:inline-flex; align-items:center; gap:8px; color:var(--accent-start); font-weight:700 }
+
+/* Buttons */
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 14px; border-radius:10px; border:none; cursor:pointer; font-weight:700 }
+.btn-primary { background: linear-gradient(90deg,var(--accent-start),var(--accent-end)); color:white; box-shadow: 0 10px 30px rgba(14,165,233,0.08) }
+.btn-ghost { background: transparent; border: 1px solid rgba(2,6,23,0.06); color:var(--text) }
+.btn-sm { padding:6px 10px; font-size:13px }
+
+/* Forms */
+input, textarea, select {
+  padding:10px 12px; border-radius:8px; border: 1px solid var(--border); background: white; font-size:14px; color:var(--text);
+}
+input:focus, textarea:focus, select:focus { outline: none; box-shadow: 0 8px 20px rgba(14,165,233,0.06); border-color: var(--accent-start) }
+
+.label { font-weight:700; font-size:13px; margin-bottom:6px; color:var(--muted) }
+.field { margin-bottom:12px }
+
+/* Tables */
+.table { width:100%; border-collapse:collapse }
+.table th, .table td { padding:10px 12px; border-bottom:1px solid var(--subtle) }
+.table th { text-align:left; font-weight:700; color:var(--muted) }
+
+/* UI Utilities */
+.muted { color: var(--muted) }
+.small { font-size:13px }
+.center { text-align:center }
+.flex { display:flex }
+.justify-between { display:flex; justify-content:space-between; align-items:center }
+
+/* Responsive tweaks */
+@media (max-width: 900px) {
+  .grid.cols-3 { grid-template-columns: repeat(2,1fr) }
+  .header-nav { gap:10px }
+}
+@media (max-width: 640px) {
+  .grid.cols-3 { grid-template-columns: 1fr }
+  .hero h1 { font-size:22px }
+  .container { padding:12px }
+}
+
+/* Keep previously declared classes but let new theme override visual details where appropriate */
+/* ...existing code... */
 :root {
   --primary: #071027; /* deep navy similar to background in attachment */
   --accent-start: #0ea5e9; /* bright blue */
@@ -73,6 +190,35 @@
   color: #e6f9ff;
   text-decoration: underline;
 }
+
+/* Replace large gradient nav-home block with a neutral header link style */
+.nav a.nav-home, .nav-home {
+  font-family: 'Poppins', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(255,255,255,0.95);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  text-decoration: none;
+  vertical-align: middle;
+  padding-left: 6px;
+}
+
+.nav a.nav-home:hover, .nav-home:hover {
+  color: #e6f9ff;
+}
+
+/* Nav link styling */
+.header-nav .nav-link, .nav-link { color: rgba(255,255,255,0.95); font-weight:700; font-size:16px; padding:6px 8px; }
+.header-nav .nav-link:hover { opacity:0.95; text-decoration:underline }
+
+/* Home label: camel case and match nav link size */
+.nav-home { font-size:16px; font-weight:700; text-transform: none; }
+
+/* Ensure logout button matches nav spacing */
+.header-nav .btn { padding:8px 10px; font-size:14px }
 
 .layout {
   display: grid;
@@ -452,35 +598,21 @@ input, textarea, select {
 .home-wordmark {
   font-family: 'Poppins', sans-serif;
   font-weight: 900;
-  font-size: 72px; /* large wordmark */
+  font-size: 48px;
   line-height: 1;
-  letter-spacing: -1px;
-  margin: 0 auto 8px auto;
+  letter-spacing: -0.5px;
   display: inline-block;
   background: linear-gradient(90deg, #0b61d0 0%, #0ea5e9 38%, #1fb36a 68%, #28c76f 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 2px 18px rgba(2,6,23,0.45);
+  text-shadow: 0 2px 12px rgba(2,6,23,0.35);
 }
 
-.home-subtitle {
-  max-width: 980px;
-  margin: 8px auto 14px auto;
-  font-size: 16px;
-  color: rgba(255,255,255,0.9);
-}
+.home-wordmark:hover { opacity: 0.98 }
 
-.home-cta-row { margin-top: 12px }
-
-@media (max-width: 960px) {
-  .home-wordmark { font-size: 56px }
-}
-
-@media (max-width: 640px) {
-  .home-wordmark { font-size: 34px }
-  .home-subtitle { font-size: 14px }
-}
+/* Ensure .nav-home (header link) matches other nav links, keep camel-case display */
+.nav-home { text-transform: none; font-size:16px }
 
 /* Billing modal styles */
 .modal-overlay {
@@ -524,17 +656,17 @@ input, textarea, select {
 
 /* Nav home wordmark - gradient, inline sized */
 .nav a.nav-home, .nav-home {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 800;
-  font-size: 28px;
+  font-family: 'Poppins', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 16px;
   line-height: 1;
-  background: linear-gradient(90deg, #0b61d0 0%, #0ea5e9 38%, #1fb36a 68%, #28c76f 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: rgba(255,255,255,0.95);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
   text-decoration: none;
   vertical-align: middle;
-  padding-left: 6px; /* small spacing from logo */
+  padding-left: 6px;
 }
 
 /* keep gradient on hover and avoid color override */
@@ -550,11 +682,10 @@ input, textarea, select {
 /* Place nav-end to align items at the far right */
 .nav-end {
   margin-left: auto; /* push to extreme right using flexbox */
-  right: 8px;         /* reduce so it's closer to viewport edge */
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1200;
   margin-right: 0; /* ensure it's flush to the right padding */
+  display: flex;
+  align-items: center; /* vertically center children inside header */
+  height: 100%;
   flex: 0 0 auto;
   z-index: 1200; /* keep above topbar content */
 }
@@ -726,7 +857,7 @@ input, textarea, select {
 }
 
 /* Account menu (badge + name + dropdown) */
-.account-menu { display: inline-block; margin-right: 8px; position: relative; }
+.account-menu { display: inline-flex; align-items: center; margin-right: 8px; position: relative; height:100%; }
 .account-btn {
   display: inline-flex;
   align-items: center;
@@ -744,62 +875,125 @@ input, textarea, select {
   position: absolute;
   background: white;
   color: #071027;
-  min-width: 180px;
+  min-width: 180px; /* keep compact */
   border-radius: 8px;
   margin-top: 8px;
   box-shadow: 0 12px 40px rgba(2,6,23,0.18);
   overflow: hidden;
   z-index: 9999; /* increased to avoid stacking context issues */
+  transform-origin: right top;
+  transition: transform 160ms ease, opacity 160ms ease;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
 }
+.account-dropdown[role="menu"] {
+  opacity: 1;
+  transform: translateY(6px) scale(1);
+}
+.account-item { display:block; padding:14px 18px; font-size:16px; color:#0b1b2f; font-weight:600 }
+.account-item:hover { background:#f7f9fb }
+.account-item.account-action { background: transparent; border: none; text-align:left }
+
+/* remove any default button outline/pill styling inside dropdown */
+.account-item.account-action { box-shadow: none; border-radius: 0; padding:14px 18px; }
+
+/* subtle divider style */
+.account-item + .account-item { border-top: 1px solid rgba(2,6,23,0.04) }
+
+/* ensure dropdown width is constrained and looks modern */
+.account-dropdown { min-width: 220px; max-width: 320px; }
+
+/* Ensure tenant-name never shows as a grey pill: make it transparent and inline */
+.account-btn { padding: 4px 6px; background: transparent; border: none; }
+.tenant-name { background: transparent !important; padding: 0 !important; margin-top: 0; display: inline-block; }
+
+/* Avoid resetting every header child which could cause unexpected side-effects */
+/* .header-container * { background: transparent; } -- removed blanket rule */
+
+/* Dropdown: cleaner, modern look */
+.account-dropdown {
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.18);
+  padding: 6px 0;
+  min-width: 220px;
+  max-width: 320px;
+  background: #ffffff;
+  border: 1px solid rgba(2,6,23,0.06);
+}
+
+/* Menu items: even spacing, left aligned text */
 .account-item {
-  display: block;
-  padding: 10px 12px;
-  color: inherit; /* fallback - more specific rule below will ensure visibility */
-  text-decoration: none;
-  border-bottom: 1px solid rgba(2,6,23,0.04);
-  background: white;
-}
-
-/* More specific selector to override header .nav a color inheritance */
-.account-dropdown .account-item {
-  color: #071027;
-}
-
-.account-item:hover { background: #f7f9fb }
-.account-item:last-child { border-bottom: none }
-
-/* keep tenant-name small and aligned in account button */
-.account-btn .tenant-name { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight:700 }
-
-@media (max-width: 720px) {
-  .account-btn .tenant-name { display: none }
-}
-  .nav { padding-right: 12px }
-  .nav-end { margin-left: 8px }
-@media (max-width: 640px) {
-  .nav { padding-right: 64px }
-  .nav-end { right: 8px }
-}
-
-/* Restaurant list address styling */
-.restaurant-address {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  color: #0b486b; /* dark blue for good contrast on white cards and visible on dark backgrounds */
-  font-size: 13px;
-  font-weight: 500;
+  gap: 10px;
+  padding: 12px 18px;
+  font-size: 15px;
+  color: #071027;
+  font-weight: 600;
+  text-decoration: none;
+  background: transparent;
 }
-.restaurant-address svg { flex-shrink: 0 }
 
-/* Restaurant card map thumbnail */
-.restaurant-card { display: block }
-.restaurant-card .map-thumb { width: 100%; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 6px 18px rgba(2,6,23,0.04); }
+.account-item:hover { background: #f6f8fa }
 
-.map-link { display:inline-flex; align-items:center; gap:8px; text-decoration:none; color: #0b486b; font-weight:700 }
-.map-link svg { flex-shrink:0 }
+/* Use separators between logical groups instead of every item */
+.account-item + .account-item { border-top: 1px solid rgba(2,6,23,0.04); }
 
-@media (min-width: 980px) {
-  .restaurant-card { padding: 16px }
+/* Make the first and last items have rounded corners visually within container */
+.account-dropdown .account-item:first-child { border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.account-dropdown .account-item:last-child { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+
+/* Logout visual: no pill, but slightly emphasized */
+.account-item.account-action { color: #071027; font-weight:700; background: transparent }
+.account-item.account-action:focus { outline: none; box-shadow: none }
+
+/* Caret and badge spacing tweaks */
+.account-btn { gap: 10px }
+.tenant-badge { box-shadow: 0 6px 16px rgba(2,6,23,0.18) }
+.account-btn .caret { margin-left: 6px; color: rgba(255,255,255,0.72); }
+
+/* Ensure dropdown sits above other content and doesn't cause layout shifts */
+.account-dropdown { z-index: 1500 }
+
+/* Small responsive tweak: shrink dropdown on very small screens */
+@media (max-width: 420px) {
+  .account-dropdown { left: 8px !important; right: 8px !important; transform: translateX(0) translateY(6px) !important; min-width: auto }
 }
+
+/* Success card animation and styling */
+@keyframes successAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.995);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.002);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.success-card {
+  /* keep card/pad classes for base visuals; add subtle entrance animation */
+  animation: successAppear .36s cubic-bezier(.2,.9,.2,1) both;
+  border-left: 4px solid #0b486b; /* accent color */
+  box-shadow: 0 12px 36px rgba(2,6,23,0.06);
+  transition: box-shadow .24s ease, transform .24s ease;
+}
+
+.success-card:hover {
+  box-shadow: 0 18px 48px rgba(2,6,23,0.08);
+  transform: translateY(-2px);
+}
+
+/* Make the main message stand out slightly */
+.success-card h3 { margin-bottom: 6px; color: #063047 }
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .success-card { animation: none; transition: none }
+}
+

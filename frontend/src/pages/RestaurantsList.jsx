@@ -36,7 +36,7 @@ export default function RestaurantsList() {
             rel="noopener noreferrer"
             onClick={(e)=>{ e.stopPropagation() }}
             className="map-link"
-            title={address}
+            aria-label={`Open map for ${address}`}
           >
             {/* inline pin SVG */}
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -132,66 +132,42 @@ export default function RestaurantsList() {
       <div className="card pad mb">
         <h2>Restaurants</h2>
         {loading ? <div className="muted">Loading restaurants…</div> : (
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12}}>
+          <div className="grid auto">
             {restaurants.length === 0 ? <div className="muted">No restaurants available.</div> : restaurants.map(r => {
-              const desc = formatDescription(r.description)
-              const imgSrc = logoSrc(r.logoUrl)
-              const address = r.address || ''
-              const truncated = truncate(address, 70)
-              // Build a Google Static Maps thumbnail URL. If a Vite env var VITE_GOOGLE_MAPS_KEY is set it will be appended.
-              const MAP_KEY = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_KEY) ? String(import.meta.env.VITE_GOOGLE_MAPS_KEY).trim() : ''
-              let staticMapUrl = null
-              if (address) {
-                const base = `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=15&size=240x120&scale=1&markers=color:red|${encodeURIComponent(address)}`
-                staticMapUrl = MAP_KEY ? `${base}&key=${MAP_KEY}` : base
-              }
+               const desc = formatDescription(r.description)
+               const imgSrc = logoSrc(r.logoUrl)
+               const address = r.address || ''
+               const truncated = truncate(address, 70)
+               // Build a Google Static Maps thumbnail URL. If a Vite env var VITE_GOOGLE_MAPS_KEY is set it will be appended.
+               const MAP_KEY = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_MAPS_KEY) ? String(import.meta.env.VITE_GOOGLE_MAPS_KEY).trim() : ''
+               let staticMapUrl = null
+               if (address) {
+                 const base = `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=15&size=240x120&scale=1&markers=color:red|${encodeURIComponent(address)}`
+                 staticMapUrl = MAP_KEY ? `${base}&key=${MAP_KEY}` : base
+               }
 
-              return (
-                <div key={r.id} className="restaurant-card card pad" style={{cursor:'pointer'}} onClick={() => navigate(`/base/${r.id}/${r.slug}`)}>
-                  <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                    {/* left column: logo + address + map thumbnail */}
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:100}}>
-                      <img
-                        src={imgSrc}
-                        alt={r.name}
-                        style={{width:72,height:72,objectFit:'cover',borderRadius:10}}
-                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = dizminuLogo }}
-                      />
-                      <div style={{width:'100%', textAlign:'center'}}>
-                        <div style={{fontSize:12, color:'#6b7280', marginBottom:4}}>Address</div>
-                        {address ? (
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={address}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{textDecoration:'none', fontSize:13, color: 'inherit', fontWeight:600}}
-                          >
-                            {truncated}
-                          </a>
-                        ) : (
-                          <div className="muted" style={{fontSize:13}}>Not provided</div>
-                        )}
+               return (
+                <div key={r.id} className="restaurant-card card" onClick={() => navigate(`/base/${r.id}/${r.slug}`)}>
+                  <div style={{display:'flex',gap:12,alignItems:'flex-start',width:'100%'}}>
+                    <div style={{width:96}}>
+                      <img src={imgSrc} alt={r.name} style={{width:88,height:88,objectFit:'cover',borderRadius:10}} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = dizminuLogo }} />
+                      <div style={{marginTop:8}}>
+                        {address ? <div className="restaurant-address small">{truncated}</div> : <div className="muted small">Not provided</div>}
+                        <div style={{marginTop:6}}>
+                          <MapThumb src={staticMapUrl} address={address} alt={`Map for ${r.name}`} />
+                        </div>
                       </div>
-                      <MapThumb
-                        src={staticMapUrl}
-                        address={address}
-                        alt={`Map for ${r.name}`}
-                      />
                     </div>
-
-                    {/* right column: name + description */}
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:800, fontSize:18, marginBottom:6}}>{r.name}</div>
-                      {desc ? <div className="muted" style={{fontSize:13}}>{desc}</div> : null}
+                    <div className="restaurant-info">
+                      <div className="restaurant-title">{r.name}</div>
+                      {desc ? <div className="restaurant-desc">{desc}</div> : null}
                     </div>
                   </div>
                 </div>
-              )
-            })}
+               )
+             })}
           </div>
-        )}
+         )}
       </div>
     </div>
   )

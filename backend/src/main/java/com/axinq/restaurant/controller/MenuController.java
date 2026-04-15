@@ -5,6 +5,7 @@ import com.axinq.restaurant.model.MenuItem;
 import com.axinq.restaurant.service.MenuService;
 import com.axinq.restaurant.service.TenantAuthService;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -66,5 +67,14 @@ public class MenuController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
         }
         return menuService.setAvailability(id, available, tenantId);
+    }
+
+    @GetMapping("/seed")
+    public MenuItem seedMenuItem() {
+        // If menu already exists, return first
+        var all = menuService.getAll();
+        if (all != null && !all.isEmpty()) return all.get(0);
+        MenuItemRequest req = new MenuItemRequest("Sample Dish", "Seeded test item", new BigDecimal("99.00"), "Main", null, true, null);
+        return menuService.create(req);
     }
 }

@@ -102,71 +102,36 @@ export default function App() {
   return (
     <CartProvider>
       <div>
-        <header className="topbar">
-          <div className="topbar-container">
-            {/* brand: show icon (cropped) and render brand text outside the image for clarity */}
-            <div className="brand">
-              <div className="brand-image">
-                <img src={dizminuLogo} alt="Dizminu logo" />
-              </div>
-              <div className="brand-wordmark">
-                <div className="brand-svg" aria-hidden="false">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="380" height="72" viewBox="0 0 380 72" role="img" aria-label="Dizminu">
-                   <defs>
-                     <linearGradient id="dizGrad" x1="0%" x2="100%">
-                       <stop offset="0%" stopColor="#0b61d0" />
-                       <stop offset="38%" stopColor="#0ea5e9" />
-                       <stop offset="68%" stopColor="#1fb36a" />
-                       <stop offset="100%" stopColor="#28c76f" />
-                     </linearGradient>
-                     {/* subtle embossed lighting */}
-                     <filter id="emboss" x="-20%" y="-20%" width="140%" height="140%">
-                       <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
-                       <feSpecularLighting in="blur" surfaceScale="2" specularConstant="0.6" specularExponent="20" lighting-color="#ffffff" result="specOut">
-                         <fePointLight x="-5000" y="-10000" z="20000"/>
-                       </feSpecularLighting>
-                       <feComposite in="specOut" in2="SourceAlpha" operator="in" result="specOut2"/>
-                       <feMerge>
-                         <feMergeNode in="specOut2"/>
-                         <feMergeNode in="SourceGraphic"/>
-                       </feMerge>
-                     </filter>
-                   </defs>
-                   <text x="0" y="50" fontFamily="Poppins, Arial, sans-serif" fontWeight="800" fontSize="48" fill="url(#dizGrad)" filter="url(#emboss)">Dizminu</text>
-                  </svg>
-                </div>
-                <div className="brand-tagline">
-                  <div className="tag-line-1">Axinq Technology</div>
-                  <div className="tag-line-2">for Smarter Dining</div>
-                </div>
-              </div>
+        <header className="header-container">
+          <div className="header-brand">
+            <div className="brand-image" style={{width:64,height:64}}>
+              <img src={dizminuLogo} alt="Dizminu logo" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
             </div>
-            <div style={{display:'flex', alignItems:'center', marginLeft:'auto'}}>
-              <nav className="nav" style={{display:'flex', gap:20}}>
-                {/* Always show public restaurants list */}
-                <Link to="/restaurants" className="nav-link">Restaurants</Link>
-                {/* show Home label only for non-logged-in users */}
-                {!token && <Link to="/" className="nav-home nav-link">Home</Link>}
-                {/* If not logged in, show Login link */}
-                {!token ? (
-                  <Link to="/login" className="nav-link">Login</Link>
-                ) : null}
-                <Link to="/subscriptions" className="nav-link">Subscriptions</Link>
-                {token ? <Link to="/admin" className="nav-link">Add Item</Link> : null}
-              </nav>
+            <div>
+              <div style={{fontWeight:800, fontSize:20, color:'white'}}>Dizminu</div>
+              <div style={{fontSize:12, color:'rgba(255,255,255,0.85)'}}>Axinq Technology • for Smarter Dining</div>
             </div>
-            {/* Render account menu as a sibling so it stays at the extreme right */}
-            {token ? (
-              <div className="nav-end">
-                <AccountMenu tenantBadge={tenantBadge} tenantName={tenantName} tenantId={tenantId} onLogout={logoutAndRedirect} />
-              </div>
-            ) : null}
-           </div>
-         </header>
+          </div>
 
-         <main className="container">
-           <Routes>
-             {/* Default landing should be /subscriptions; root redirects there when not logged in */}
+          <nav className="header-nav">
+            {!token && <Link to="/restaurants" className="nav-link">Restaurants</Link>}
+            {!token && <Link to="/" className="nav-home nav-link">Home</Link>}
+            {!token ? (
+              <Link to="/login" className="nav-link">Login</Link>
+            ) : null}
+            {/* Add Item moved into AccountMenu dropdown when logged in */}
+          </nav>
+
+          {token ? (
+            <div className="nav-end">
+              <AccountMenu tenantBadge={tenantBadge} tenantName={tenantName} tenantId={tenantId} onLogout={logoutAndRedirect} />
+            </div>
+          ) : null}
+        </header>
+
+        <main className="container">
+          <Routes>
+            {/* Default landing should be /subscriptions; root redirects there when not logged in */}
             {/* If logged in, send users to the customer menu (avoid rendering AdminHome at root which caused hook mismatch) */}
             <Route path="/" element={token ? <Navigate to="/menu" replace /> : <HomePage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -183,10 +148,10 @@ export default function App() {
             <Route path="/admin" element={<RequireAuth><ErrorBoundary><AdminPage /></ErrorBoundary></RequireAuth>} />
             <Route path="/401" element={<Error401 />} />
             <Route path="/403" element={<Error403 />} />
-             <Route path="/order-success/:id" element={<OrderSuccessPage />} />
-           </Routes>
-         </main>
-       </div>
-     </CartProvider>
-   )
- }
+            <Route path="/order-success/:id" element={<OrderSuccessPage />} />
+          </Routes>
+        </main>
+      </div>
+    </CartProvider>
+  )
+}
