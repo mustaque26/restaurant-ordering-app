@@ -105,6 +105,18 @@ export default function CartPanel({ qrImageUrl, tenantId = null }) {
         }
       }
 
+      // Notify other components (header/orders) that a new order was placed
+      try {
+        // fetch latest count (tenant-scoped when tenantId present)
+        const params = tenantId ? { tenantId, limit: 3 } : { limit: 3 }
+        const latestRes = await api.get('/orders/latest', { params })
+        const cnt = Array.isArray(latestRes.data) ? latestRes.data.length : 0
+        window.dispatchEvent(new CustomEvent('orders-count', { detail: Number(cnt) }))
+      } catch (e) {
+        // fallback: dispatch 1 so header updates to show activity
+        try { window.dispatchEvent(new CustomEvent('orders-count', { detail: 1 })) } catch (ee) {}
+      }
+
       if (orderId) {
         // Fetch full order details and pass via navigation state so the OrderSuccess page can show items
         try {
@@ -119,7 +131,7 @@ export default function CartPanel({ qrImageUrl, tenantId = null }) {
         setError('Order placed but server did not return an order id.')
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Unable to place order')
+      setError(err?.response?.data?.error || err?.response?.data?.message || 'Unable to place order')
     } finally {
       setLoading(false)
     }

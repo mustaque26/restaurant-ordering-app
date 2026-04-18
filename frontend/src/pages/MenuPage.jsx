@@ -5,7 +5,9 @@ import MenuCard from '../components/MenuCard'
 import CartPanel from '../components/CartPanel'
 
 export default function MenuPage() {
-  const { token } = useParams() // token may be numeric tenant id or a slug
+  // Support routes: /:token/:restaurant (token) and /base/:id/:restaurant (id)
+  const routeParams = useParams()
+  const token = routeParams.token || routeParams.id || '' // token may be numeric tenant id or a slug
   const [tenantId, setTenantId] = useState(null)
   const [resolved, setResolved] = useState(false)
 

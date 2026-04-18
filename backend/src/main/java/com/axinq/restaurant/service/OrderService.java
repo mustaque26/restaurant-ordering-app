@@ -14,7 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OrderService {
@@ -98,11 +103,90 @@ public class OrderService {
         return orderRepository.findAll();
     }
 
+    public List<Order> getLatestOrders(Long tenantId, int limit) {
+        Pageable p = PageRequest.of(0, Math.max(1, limit), Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (tenantId != null) {
+            return orderRepository.findByTenantIdOrderByCreatedAtDesc(tenantId, p).getContent();
+        } else {
+            return orderRepository.findAllByOrderByCreatedAtDesc(p).getContent();
+        }
+    }
+
+    // Return recent orders that are not 'closed' (DELIVERED or CANCELLED). Used for admin active tracking.
+    public List<Order> getRecentOrders(Long tenantId, int limit) {
+        Pageable p = PageRequest.of(0, Math.max(1, limit), Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<OrderStatus> closed = List.of(OrderStatus.DELIVERED, OrderStatus.CANCELLED);
+        if (tenantId != null) {
+            return orderRepository.findByTenantIdAndStatusNotInOrderByCreatedAtDesc(tenantId, closed, p).getContent();
+        } else {
+            return orderRepository.findByStatusNotInOrderByCreatedAtDesc(closed, p).getContent();
+        }
+    }
+
     public Order getOrder(Long id) {
         Order o = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found: " + id));
         // Initialize lazy collection to ensure JSON serialization includes items
         if (o.getItems() != null) o.getItems().size();
         return o;
+    }
+
+    @Transactional
+    public Order updateStatus(Long id, String newStatus) {
+        Order order = orderRepository.findById(id).orElseThrow(() -> new RuntimeException("Order not found: " + id));
+        if (newStatus == null || newStatus.isBlank()) throw new IllegalArgumentException("Status is required");
+        try {
+            OrderStatus os = OrderStatus.valueOf(newStatus);
+            order.setStatus(os);
+            Order saved = orderRepository.save(order);
+            return saved;
+        } catch (IllegalArgumentException iae) {
+            throw new IllegalArgumentException("Invalid order status: " + newStatus);
+        }
+    }
+
+    @Transactional
+    public Order updateTenant(Long id, Long tenantId) {
+        Order order = orderRepository.findById(id).orElseThrow(() -> new RuntimeException("Order not found: " + id));
+        // allow null to clear tenant if needed
+        order.setTenantId(tenantId);
+        return orderRepository.save(order);
+    }
+
+    public Page<Order> getOrdersPaged(int page, int size) {
+        Pageable p = PageRequest.of(Math.max(0, page), Math.max(1, size), Sort.by(Sort.Direction.DESC, "createdAt"));
+        return orderRepository.findAll(p);
+    }
+
+    public Page<Order> getOrdersByDateRangePaged(Long tenantId, LocalDateTime from, LocalDateTime to, int page, int size) {
+        Pageable p = PageRequest.of(Math.max(0, page), Math.max(1, size), Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (from == null || to == null) {
+            return getOrdersPaged(page, size);
+        }
+        if (tenantId != null) {
+            return orderRepository.findByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(tenantId, from, to, p);
+        } else {
+            return orderRepository.findAllByCreatedAtBetweenOrderByCreatedAtDesc(from, to, p);
+        }
+    }
+
+    // Return up to 'limit' orders in the given date-range (desc by createdAt)
+    public List<Order> getOrdersForDateRange(Long tenantId, LocalDateTime from, LocalDateTime to, int limit) {
+        Pageable p = PageRequest.of(0, Math.max(1, limit), Sort.by(Sort.Direction.DESC, "createdAt"));
+        if (from == null || to == null) {
+            // fallback to latest
+            return getLatestOrders(tenantId, limit);
+        }
+        if (tenantId != null) {
+            return orderRepository.findByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(tenantId, from, to, p).getContent();
+        } else {
+            return orderRepository.findAllByCreatedAtBetweenOrderByCreatedAtDesc(from, to, p).getContent();
+        }
+    }
+
+    // Debug helper: search orders by customer name (case-insensitive contains)
+    public List<Order> searchOrdersByCustomerName(String name) {
+        if (name == null || name.isBlank()) return List.of();
+        return orderRepository.findByCustomerNameIgnoreCaseContaining(name.trim());
     }
 }

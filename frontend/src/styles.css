@@ -992,8 +992,41 @@ input, textarea, select {
 /* Make the main message stand out slightly */
 .success-card h3 { margin-bottom: 6px; color: #063047 }
 
-/* Respect reduced motion preferences */
-@media (prefers-reduced-motion: reduce) {
-  .success-card { animation: none; transition: none }
+/* Orders badge pulse animation */
+.orders-badge-pulse {
+  display:inline-block;
+  width:14px;
+  height:14px;
+  background: radial-gradient(circle at 30% 30%, rgba(14,165,233,0.95), rgba(40,199,111,0.95));
+  border-radius:999px;
+  box-shadow: 0 0 0 rgba(40,199,111,0.6);
+  margin-left:8px;
+  animation: ordersPulse 900ms ease-out forwards;
+  vertical-align:middle;
 }
 
+.orders-badge-hidden { display:none }
+
+@keyframes ordersPulse {
+  0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(40,199,111,0.9); opacity:0.95 }
+  30% { transform: scale(1.15); box-shadow: 0 0 10px 6px rgba(40,199,111,0.12); opacity:1 }
+  70% { transform: scale(1); box-shadow: 0 0 20px 12px rgba(14,165,233,0.04); opacity:0.9 }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(14,165,233,0); opacity:0.85 }
+}
+
+/* Ensure the inline OrdersDropdown and badge align with nav layout */
+.header-nav > div { position: relative }
+
+/* Status pill for read-only status in recent orders */
+.status-pill {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 18px;
+  background: rgba(15,23,42,0.06);
+  border: 1px solid rgba(2,6,23,0.04);
+  color: #071027;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* end of appended styles */

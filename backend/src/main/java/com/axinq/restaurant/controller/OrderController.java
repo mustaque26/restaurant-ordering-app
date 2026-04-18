@@ -7,8 +7,16 @@ import com.axinq.restaurant.service.SystemEmailService;
 import com.axinq.restaurant.service.TenantEmailService;
 import com.axinq.restaurant.service.OrderService;
 import com.axinq.restaurant.service.WhatsappQueueService;
+import com.axinq.restaurant.service.OrderEventService;
+import com.axinq.restaurant.service.TenantAuthService;
+import com.axinq.restaurant.service.AdminAuthService;
 import jakarta.validation.Valid;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -27,6 +35,8 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.springframework.data.domain.Page;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -39,14 +49,20 @@ public class OrderController {
     private final TenantEmailService tenantEmailService;
     private final WhatsappQueueService whatsappQueue;
     private final TenantRepository tenantRepository;
+    private final OrderEventService orderEventService;
+    private final TenantAuthService tenantAuthService;
+    private final AdminAuthService adminAuthService;
 
     @Autowired
-    public OrderController(OrderService orderService, SystemEmailService systemEmailService, TenantEmailService tenantEmailService, WhatsappQueueService whatsappQueue, TenantRepository tenantRepository) {
+    public OrderController(OrderService orderService, SystemEmailService systemEmailService, TenantEmailService tenantEmailService, WhatsappQueueService whatsappQueue, TenantRepository tenantRepository, OrderEventService orderEventService, TenantAuthService tenantAuthService, AdminAuthService adminAuthService) {
         this.orderService = orderService;
         this.systemEmailService = systemEmailService;
         this.tenantEmailService = tenantEmailService;
         this.whatsappQueue = whatsappQueue;
         this.tenantRepository = tenantRepository;
+        this.orderEventService = orderEventService;
+        this.tenantAuthService = tenantAuthService;
+        this.adminAuthService = adminAuthService;
     }
 
     @PostMapping
@@ -378,5 +394,317 @@ public class OrderController {
     private static String escapeHtml(String s) {
         if (s == null) return "";
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
+    }
+
+    // Helper: parse a path-variable id (which may come as a string). Return null if not a valid numeric id.
+    private Long parseId(String idStr) {
+        if (idStr == null) return null;
+        try {
+            return Long.valueOf(idStr);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    @GetMapping("/{id}/status")
+    public ResponseEntity<Map<String,Object>> getOrderStatus(@PathVariable String id) {
+        Long numericId = parseId(id);
+        if (numericId == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid order id"));
+        }
+        try {
+            Order order = orderService.getOrder(numericId);
+            if (order == null) return ResponseEntity.notFound().build();
+            Map<String,Object> resp = new HashMap<>();
+            resp.put("id", order.getId());
+            resp.put("status", order.getStatus() != null ? order.getStatus().name() : null);
+            resp.put("createdAt", order.getCreatedAt() != null ? order.getCreatedAt().toString() : null);
+            resp.put("totalAmount", order.getTotalAmount());
+            return ResponseEntity.ok(resp);
+        } catch (Exception ex) {
+            log.error("Failed to fetch order status for {}", id, ex);
+            return ResponseEntity.status(500).body(Map.of("error", "Unable to fetch order status"));
+        }
+    }
+
+    // SSE endpoint for clients to subscribe to status updates for an order
+    @GetMapping(value = "/{id}/events", produces = "text/event-stream")
+    public SseEmitter subscribeToOrderEvents(@PathVariable String id) {
+        Long numericId = parseId(id);
+        if (numericId == null) {
+            // return an emitter but close immediately with error to avoid client hanging
+            SseEmitter closed = new SseEmitter(0L);
+            try { closed.send(SseEmitter.event().name("error").data(Map.of("error", "Invalid order id"))); } catch (Exception e) {}
+            try { closed.complete(); } catch (Exception e) {}
+            return closed;
+        }
+        SseEmitter emitter = orderEventService.createEmitter(numericId);
+        // Send initial status snapshot
+        try {
+            var order = orderService.getOrder(numericId);
+            if (order != null) {
+                Map<String,Object> payload = new HashMap<>();
+                payload.put("id", order.getId());
+                payload.put("status", order.getStatus() != null ? order.getStatus().name() : null);
+                payload.put("createdAt", order.getCreatedAt() != null ? order.getCreatedAt().toString() : null);
+                payload.put("totalAmount", order.getTotalAmount());
+                emitter.send(SseEmitter.event().name("status").data(payload));
+            }
+        } catch (Exception e) {
+            // ignore initial send failure; emitter remains subscribed
+        }
+        return emitter;
+    }
+
+    // Admin/restaurant can update order status via this endpoint. It emits SSE updates to subscribers.
+    @PostMapping("/{id}/status")
+    public ResponseEntity<?> updateOrderStatus(@PathVariable String id, @RequestBody Map<String,String> body, @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        String status = body.get("status");
+        if (status == null || status.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "status is required"));
+        Long numericId = parseId(id);
+        if (numericId == null) return ResponseEntity.badRequest().body(Map.of("error", "Invalid order id"));
+        try {
+            // Authorization: allow if tenant token matches order.tenantId or admin token is valid
+            Long authTenantId = tenantAuthService.validateTokenHeader(authHeader);
+            boolean isAdmin = adminAuthService.validateTokenHeader(authHeader);
+            if (authTenantId == null && !isAdmin) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Unauthorized"));
+            }
+            // If tenant token present, ensure it matches order's tenantId
+            Order existing = orderService.getOrder(numericId);
+            if (existing == null) return ResponseEntity.notFound().build();
+            if (authTenantId != null) {
+                // tenant token present: order must belong to that tenant (and not be null)
+                if (existing.getTenantId() == null || !authTenantId.equals(existing.getTenantId())) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Forbidden: tenant mismatch"));
+                }
+            }
+
+            Order updated = orderService.updateStatus(numericId, status);
+            Map<String,Object> payload = new HashMap<>();
+            payload.put("id", updated.getId());
+            payload.put("status", updated.getStatus() != null ? updated.getStatus().name() : null);
+            payload.put("createdAt", updated.getCreatedAt() != null ? updated.getCreatedAt().toString() : null);
+            payload.put("totalAmount", updated.getTotalAmount());
+            // emit using numericId (Long) to match OrderEventService signature
+            orderEventService.emitStatus(numericId, payload);
+            return ResponseEntity.ok(payload);
+        } catch (IllegalArgumentException iae) {
+            return ResponseEntity.badRequest().body(Map.of("error", iae.getMessage()));
+        } catch (Exception ex) {
+            log.error("Failed to update status for order {}", id, ex);
+            return ResponseEntity.status(500).body(Map.of("error", "Unable to update status"));
+        }
+    }
+
+    @GetMapping("/latest")
+    public ResponseEntity<List<Map<String,Object>>> getLatestOrders(@RequestParam(value = "tenantId", required = false) Long tenantId,
+                                                                     @RequestParam(value = "limit", required = false, defaultValue = "3") int limit) {
+        try {
+            List<Order> latest = orderService.getLatestOrders(tenantId, limit);
+            List<Map<String,Object>> out = new java.util.ArrayList<>();
+            for (Order o : latest) {
+                Map<String,Object> m = new HashMap<>();
+                m.put("id", o.getId());
+                m.put("customerName", o.getCustomerName());
+                m.put("status", o.getStatus() != null ? o.getStatus().name() : null);
+                m.put("totalAmount", o.getTotalAmount());
+                m.put("deliveryAddress", o.getDeliveryAddress());
+                m.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+                m.put("tenantId", o.getTenantId());
+                out.add(m);
+            }
+            return ResponseEntity.ok(out);
+        } catch (Exception ex) {
+            log.error("Failed to fetch latest orders", ex);
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+
+    @GetMapping("/recent")
+    public ResponseEntity<List<Map<String,Object>>> getRecentOrders(@RequestParam(value = "tenantId", required = false) Long tenantId,
+                                                                     @RequestHeader(value = "Authorization", required = false) String authHeader,
+                                                                     @RequestParam(value = "limit", required = false, defaultValue = "50") int limit) {
+        try {
+            // Try to infer tenantId from auth header if not provided
+            if (tenantId == null && authHeader != null && !authHeader.isBlank()) {
+                try {
+                    Long authTenantId = tenantAuthService.validateTokenHeader(authHeader);
+                    if (authTenantId != null) tenantId = authTenantId;
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+            List<Order> recent = orderService.getRecentOrders(tenantId, limit);
+            List<Map<String,Object>> out = new java.util.ArrayList<>();
+            for (Order o : recent) {
+                Map<String,Object> m = new HashMap<>();
+                m.put("id", o.getId());
+                m.put("customerName", o.getCustomerName());
+                m.put("status", o.getStatus() != null ? o.getStatus().name() : null);
+                m.put("totalAmount", o.getTotalAmount());
+                m.put("deliveryAddress", o.getDeliveryAddress());
+                m.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+                m.put("tenantId", o.getTenantId());
+                out.add(m);
+            }
+            return ResponseEntity.ok(out);
+        } catch (Exception ex) {
+            log.error("Failed to fetch recent orders", ex);
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+
+    @GetMapping("/today")
+    public ResponseEntity<List<Map<String,Object>>> getTodaysOrders(@RequestParam(value = "tenantId", required = false) Long tenantId,
+                                                                     @RequestHeader(value = "Authorization", required = false) String authHeader,
+                                                                     @RequestParam(value = "limit", required = false, defaultValue = "100") int limit) {
+        try {
+            // Try to infer tenantId from auth header if not provided
+            if (tenantId == null && authHeader != null && !authHeader.isBlank()) {
+                try {
+                    Long authTenantId = tenantAuthService.validateTokenHeader(authHeader);
+                    if (authTenantId != null) tenantId = authTenantId;
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+            LocalDateTime start = LocalDate.now().atStartOfDay();
+            LocalDateTime end = LocalDate.now().atTime(23,59,59,999000000);
+            List<Order> today = orderService.getOrdersForDateRange(tenantId, start, end, limit);
+            List<Map<String,Object>> out = new java.util.ArrayList<>();
+            for (Order o : today) {
+                Map<String,Object> m = new HashMap<>();
+                m.put("id", o.getId());
+                m.put("customerName", o.getCustomerName());
+                m.put("status", o.getStatus() != null ? o.getStatus().name() : null);
+                m.put("totalAmount", o.getTotalAmount());
+                m.put("deliveryAddress", o.getDeliveryAddress());
+                m.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+                m.put("tenantId", o.getTenantId());
+                out.add(m);
+            }
+            return ResponseEntity.ok(out);
+        } catch (Exception ex) {
+            log.error("Failed to fetch today's orders", ex);
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<Map<String,Object>> getOrdersHistory(
+            @RequestParam(value = "tenantId", required = false) Long tenantId,
+            @RequestParam(value = "from", required = false) String fromStr,
+            @RequestParam(value = "to", required = false) String toStr,
+            @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(value = "size", required = false, defaultValue = "20") int size,
+            @RequestHeader(value = "Authorization", required = false) String authHeader
+    ) {
+        try {
+            // If tenantId not provided, and auth header present, try to infer tenant id
+            if (tenantId == null && authHeader != null && !authHeader.isBlank()) {
+                try {
+                    Long authTenantId = tenantAuthService.validateTokenHeader(authHeader);
+                    if (authTenantId != null) tenantId = authTenantId;
+                } catch (Exception e) {
+                    // ignore - fallback to no tenant scoping
+                }
+            }
+
+            LocalDateTime from = null;
+            LocalDateTime to = null;
+            if (fromStr != null && !fromStr.isBlank()) {
+                try {
+                    // accept date-only (yyyy-MM-dd) or ISO_LOCAL_DATE_TIME
+                    if (fromStr.length() == 10) {
+                        LocalDate d = LocalDate.parse(fromStr);
+                        from = d.atStartOfDay();
+                    } else {
+                        from = LocalDateTime.parse(fromStr);
+                    }
+                } catch (DateTimeParseException ex) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Invalid 'from' date format. Use yyyy-MM-dd or ISO date-time."));
+                }
+            }
+            if (toStr != null && !toStr.isBlank()) {
+                try {
+                    if (toStr.length() == 10) {
+                        LocalDate d = LocalDate.parse(toStr);
+                        to = d.atTime(23,59,59,999000000);
+                    } else {
+                        to = LocalDateTime.parse(toStr);
+                    }
+                } catch (DateTimeParseException ex) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Invalid 'to' date format. Use yyyy-MM-dd or ISO date-time."));
+                }
+            }
+
+            Page<Order> pageRes = orderService.getOrdersByDateRangePaged(tenantId, from, to, page, size);
+            List<Map<String,Object>> out = new java.util.ArrayList<>();
+            for (Order o : pageRes.getContent()) {
+                Map<String,Object> m = new HashMap<>();
+                m.put("id", o.getId());
+                m.put("customerName", o.getCustomerName());
+                m.put("status", o.getStatus() != null ? o.getStatus().name() : null);
+                m.put("totalAmount", o.getTotalAmount());
+                m.put("deliveryAddress", o.getDeliveryAddress());
+                m.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+                m.put("tenantId", o.getTenantId());
+                out.add(m);
+            }
+            Map<String,Object> resp = new HashMap<>();
+            resp.put("content", out);
+            resp.put("page", pageRes.getNumber());
+            resp.put("size", pageRes.getSize());
+            resp.put("totalPages", pageRes.getTotalPages());
+            resp.put("totalElements", pageRes.getTotalElements());
+            return ResponseEntity.ok(resp);
+        } catch (Exception ex) {
+            log.error("Failed to fetch paged order history", ex);
+            return ResponseEntity.status(500).body(Map.of("error", "Unable to fetch order history"));
+        }
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<Map<String,Object>>> searchOrdersByName(@RequestParam("name") String name) {
+        try {
+            List<Order> found = orderService.searchOrdersByCustomerName(name);
+            List<Map<String,Object>> out = new java.util.ArrayList<>();
+            for (Order o : found) {
+                Map<String,Object> m = new HashMap<>();
+                m.put("id", o.getId());
+                m.put("customerName", o.getCustomerName());
+                m.put("tenantId", o.getTenantId());
+                m.put("createdAt", o.getCreatedAt() != null ? o.getCreatedAt().toString() : null);
+                m.put("status", o.getStatus() != null ? o.getStatus().name() : null);
+                out.add(m);
+            }
+            return ResponseEntity.ok(out);
+        } catch (Exception ex) {
+            log.error("Search orders failed", ex);
+            return ResponseEntity.status(500).body(List.of());
+        }
+    }
+
+    @PostMapping("/{id}/assign-tenant")
+    public ResponseEntity<?> assignTenantToOrder(@PathVariable Long id, @RequestBody Map<String, Object> body, @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            // Only admin tokens can assign tenant mapping
+            boolean isAdmin = adminAuthService.validateTokenHeader(authHeader);
+            if (!isAdmin) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Unauthorized"));
+            Long tenantId = null;
+            if (body.containsKey("tenantId") && body.get("tenantId") != null) {
+                Object t = body.get("tenantId");
+                if (t instanceof Number) tenantId = ((Number) t).longValue();
+                else if (t instanceof String && !((String) t).isBlank()) tenantId = Long.valueOf((String) t);
+            }
+            Order updated = orderService.updateTenant(id, tenantId);
+            return ResponseEntity.ok(Map.of("id", updated.getId(), "tenantId", updated.getTenantId()));
+        } catch (NumberFormatException nfe) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid tenantId"));
+        } catch (Exception ex) {
+            log.error("Failed to assign tenant to order {}", id, ex);
+            return ResponseEntity.status(500).body(Map.of("error", "Unable to assign tenant to order"));
+        }
     }
 }

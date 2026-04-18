@@ -78,6 +78,7 @@ export default function OrderSuccessPage() {
 
       <div style={{marginTop:18,display:'flex',gap:12}}>
         <Link to="/" className="subscribe-btn">Back to Menu</Link>
+        <Link to={`/order-status/${order.id}`} className="subscribe-btn" style={{background:'#0b486b'}}>Track Order Status</Link>
         <button
           className="subscribe-btn"
           onClick={async () => {
