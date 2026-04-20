@@ -1,0 +1,6 @@
+services:
+  dizminu:
+    build: .
+    image: dizminu-app:latest
+    ports:
+      - "8080:8080"

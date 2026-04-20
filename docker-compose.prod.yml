@@ -1,0 +1,13 @@
+services:
+  dizminu:
+    image: YOUR_DOCKERHUB_USER/dizminu-app:latest
+    container_name: dizminu-app
+    restart: unless-stopped
+    ports:
+      - '80:8080'
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./backend/logs:/app/backend/logs
+    env_file:
+      - ./.env
+

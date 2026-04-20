@@ -1,0 +1,83 @@
+name: CI/CD Docker Build & Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-push:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.set-image.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/dizminu-app:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/dizminu-app:${{ github.sha }}
+          platforms: linux/amd64,linux/arm64
+
+      - name: Set image output
+        id: set-image
+        run: echo "image=${{ secrets.DOCKERHUB_USERNAME }}/dizminu-app:latest" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to remote server via SSH
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start ssh-agent and add key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: "Deploy: upload compose and run on remote"
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/dizminu-app:latest
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_PORT: ${{ secrets.SSH_PORT }}
+          REMOTE_DIR: ${{ secrets.REMOTE_DIR }}
+        run: |
+          echo "Deploying image $IMAGE to $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR"
+
+          # ensure remote dir exists
+          ssh -o StrictHostKeyChecking=no -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" "mkdir -p '$REMOTE_DIR'"
+
+          # copy the repo docker-compose.prod.yml to remote
+          scp -P "$REMOTE_PORT" docker-compose.prod.yml "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/docker-compose.prod.yml"
+
+          # replace placeholder image name with the built image
+          ssh -o StrictHostKeyChecking=no -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" "sed -i 's|YOUR_DOCKERHUB_USER/dizminu-app:latest|${IMAGE}|g' $REMOTE_DIR/docker-compose.prod.yml || true"
+
+          # ensure .env exists remotely (create placeholder)
+          ssh -o StrictHostKeyChecking=no -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" "[ -f $REMOTE_DIR/.env ] || cat > $REMOTE_DIR/.env <<'ENV'\nSPRING_MAIL_DIZMINU_USERNAME=you@example.com\nSPRING_MAIL_DIZMINU_PASSWORD=change-me\nSPRING_MAIL_SALES_USERNAME=you@example.com\nSPRING_MAIL_SALES_PASSWORD=change-me\nENV"
+
+          # pull and restart services on remote
+          ssh -o StrictHostKeyChecking=no -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" "cd $REMOTE_DIR && docker compose -f docker-compose.prod.yml pull --ignore-pull-failures || true && docker compose -f docker-compose.prod.yml up -d --force-recreate"
+
+      - name: Notify
+        run: echo "Deployment finished"

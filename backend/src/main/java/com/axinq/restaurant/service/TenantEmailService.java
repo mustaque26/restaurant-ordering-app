@@ -44,6 +44,10 @@ public class TenantEmailService {
             props.put("mail.smtp.auth", "true");
             props.put("mail.smtp.starttls.enable", "true");
             props.put("mail.smtp.starttls.required", "true");
+            props.put("mail.smtp.connectiontimeout", "5000");
+            props.put("mail.smtp.timeout", "5000");
+            props.put("mail.smtp.writetimeout", "5000");
+            props.put("mail.smtp.ssl.trust", "smtp.gmail.com");
             props.put("mail.debug", "false");
 
             SimpleMailMessage message = new SimpleMailMessage();
@@ -58,7 +62,11 @@ public class TenantEmailService {
                 log.info("TenantEmail: sent via tenant SMTP to={}", toEmail);
                 return;
             } catch (Exception ex) {
-                log.warn("TenantEmail: failed to send with tenant SMTP for from={}; falling back to sales sender", tenantFrom);
+                log.warn("TenantEmail: failed to send with tenant SMTP for from={}; falling back to sales sender; error={}", tenantFrom, ex.toString());
+                // If the exception is UnknownHostException or connectivity related, add a clearer message
+                if (ex.getCause() != null) {
+                    log.debug("TenantEmail: tenant SMTP failure cause:", ex.getCause());
+                }
                 // fall through to fallback
             }
         }
@@ -74,7 +82,7 @@ public class TenantEmailService {
             salesSender.send(message);
             log.info("TenantEmail: sent via sales sender to={}", toEmail);
         } catch (Exception ex) {
-            log.error("TenantEmail: failed to send to {} (subject={}) via sales sender", toEmail, subject, ex);
+            log.error("TenantEmail: failed to send to {} (subject={}) via sales sender. error={}", toEmail, subject, ex.toString(), ex);
             throw ex;
         }
     }
@@ -96,6 +104,10 @@ public class TenantEmailService {
             props.put("mail.smtp.auth", "true");
             props.put("mail.smtp.starttls.enable", "true");
             props.put("mail.smtp.starttls.required", "true");
+            props.put("mail.smtp.connectiontimeout", "5000");
+            props.put("mail.smtp.timeout", "5000");
+            props.put("mail.smtp.writetimeout", "5000");
+            props.put("mail.smtp.ssl.trust", "smtp.gmail.com");
             props.put("mail.debug", "false");
 
             try {
@@ -119,7 +131,7 @@ public class TenantEmailService {
                 log.info("TenantEmail(HTML): sent via tenant SMTP to={}", toEmail);
                 return;
             } catch (Exception ex) {
-                log.warn("TenantEmail(HTML): failed via tenant SMTP for from={}; falling back to sales sender", tenantFrom, ex);
+                log.warn("TenantEmail(HTML): failed via tenant SMTP for from={}; falling back to sales sender; error={}", tenantFrom, ex.toString());
             }
         }
 
@@ -143,7 +155,7 @@ public class TenantEmailService {
             salesSender.send(mime);
             log.info("TenantEmail(HTML): sent via sales sender to={}", toEmail);
         } catch (Exception ex) {
-            log.error("TenantEmail(HTML): failed to send to {} (subject={}) via sales sender", toEmail, subject, ex);
+            log.error("TenantEmail(HTML): failed to send to {} (subject={}) via sales sender. error={}", toEmail, subject, ex.toString(), ex);
             throw new RuntimeException(ex);
         }
     }

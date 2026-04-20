@@ -1,0 +1,20 @@
+services:
+  dizminu:
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./backend/logs:/app/backend/logs
+      - ./frontend:/app/frontend:ro
+    environment:
+      SPRING_MAIL_DIZMINU_PASSWORD: "${SPRING_MAIL_DIZMINU_PASSWORD:-}"
+      SPRING_MAIL_SALES_PASSWORD: "${SPRING_MAIL_SALES_PASSWORD:-}"
+    ports:
+      - "8080:8080"
+    build:
+      context: .
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped

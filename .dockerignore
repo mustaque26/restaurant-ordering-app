@@ -1,0 +1,43 @@
+# Ignore Git metadata and editor files
+.git
+.gitignore
+.vscode/
+.idea/
+*.iml
+.DS_Store
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/.vite/
+
+# Frontend build output (we usually rebuild inside Dockerfile's frontend stage)
+frontend/dist/
+
+# Java / Maven
+backend/target/
+**/target/
+backend/.mvn/
+
+# Local runtime data and logs
+backend/data/
+backend/logs/
+*.log
+
+# Temp / OS files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment / secrets
+.env
+.env.local
+
+# Database files
+*.mv.db
+*.trace.db
+
+# Docker
+Dockerfile
+docker-compose.override.yml
+

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.time.Instant;
@@ -36,14 +37,20 @@ public class SystemEmailService {
     }
 
     private void writeDebug(String s, Exception ex) {
-        try (FileWriter fw = new FileWriter("/tmp/email_debug.log", true);
-             PrintWriter pw = new PrintWriter(fw)) {
-            pw.println("[" + Instant.now().toString() + "] " + s);
-            if (ex != null) {
-                ex.printStackTrace(pw);
+        try {
+            // prefer a local ./backend/logs directory (relative to working dir); create if missing
+            File dir = new File("./backend/logs");
+            if (!dir.exists()) dir.mkdirs();
+            File file = new File(dir, "email_debug.log");
+            try (FileWriter fw = new FileWriter(file, true);
+                 PrintWriter pw = new PrintWriter(fw)) {
+                pw.println("[" + Instant.now().toString() + "] " + s);
+                if (ex != null) {
+                    ex.printStackTrace(pw);
+                }
             }
         } catch (Exception e) {
-            log.warn("Unable to write email debug file", e);
+            log.warn("Unable to write email debug file to ./backend/logs/email_debug.log", e);
         }
     }
 
@@ -63,9 +70,32 @@ public class SystemEmailService {
             log.info(ok);
             writeDebug(ok, null);
         } catch (Exception ex) {
-            String err = String.format("SystemEmail: failed to send to %s (subject=%s) -> %s", toEmail, subject, ex.toString());
+            String err = String.format("SystemEmail: failed to send to %s (subject=%s) with sender=%s -> %s", toEmail, subject, sender==dizminuSender?"dizminuSender":"other", ex.toString());
             log.error(err, ex);
             writeDebug(err, ex);
+            // If we failed using the dizminu sender, try salesSender fallback
+            if (sender == dizminuSender) {
+                try {
+                    String fallback = String.format("SystemEmail: falling back to sales sender for to=%s subject=%s", toEmail, subject);
+                    log.info(fallback);
+                    writeDebug(fallback, null);
+                    SimpleMailMessage fallbackMsg = new SimpleMailMessage();
+                    if (from != null && !from.isBlank()) fallbackMsg.setFrom(from);
+                    else fallbackMsg.setFrom(salesFrom);
+                    fallbackMsg.setTo(toEmail);
+                    fallbackMsg.setSubject(subject);
+                    fallbackMsg.setText(body);
+                    salesSender.send(fallbackMsg);
+                    String ok2 = String.format("SystemEmail: sent via sales sender to=%s", toEmail);
+                    log.info(ok2);
+                    writeDebug(ok2, null);
+                    return;
+                } catch (Exception ex2) {
+                    String err2 = String.format("SystemEmail: fallback sales sender also failed for to=%s -> %s", toEmail, ex2.toString());
+                    log.error(err2, ex2);
+                    writeDebug(err2, ex2);
+                }
+            }
             throw ex;
         }
     }
@@ -110,9 +140,47 @@ public class SystemEmailService {
             log.info(ok);
             writeDebug(ok, null);
         } catch (Exception ex) {
-            String err = String.format("SystemEmail(HTML): failed to send to %s (subject=%s) -> %s", toEmail, subject, ex.toString());
+            String err = String.format("SystemEmail(HTML): failed to send to %s (subject=%s) with sender=%s -> %s", toEmail, subject, ex.toString(), ex.toString());
             log.error(err, ex);
             writeDebug(err, ex);
+            // fallback to salesSender if the original sender was dizminuSender
+            if (sender == dizminuSender) {
+                try {
+                    String fallback = String.format("SystemEmail(HTML): falling back to sales sender for to=%s subject=%s", toEmail, subject);
+                    log.info(fallback);
+                    writeDebug(fallback, null);
+                    MimeMessage mime2 = salesSender.createMimeMessage();
+                    MimeMessageHelper helper2 = new MimeMessageHelper(mime2, true, "UTF-8");
+                    if (from != null && !from.isBlank()) helper2.setFrom(from);
+                    else helper2.setFrom(salesFrom);
+                    helper2.setTo(toEmail);
+                    helper2.setSubject(subject);
+                    helper2.setText(htmlBody, true);
+                    // attach logo if available
+                    try {
+                        ClassPathResource logo = new ClassPathResource("static/images/dizminuLogo.png");
+                        if (!logo.exists()) {
+                            logo = new ClassPathResource("static/images/dizminu-logo.png");
+                        }
+                        if (!logo.exists()) {
+                            logo = new ClassPathResource("static/images/axinq-logo.png");
+                        }
+                        if (logo.exists()) {
+                            helper2.addInline("dizminuLogo", logo);
+                        }
+                    } catch (Exception ignore) {}
+
+                    salesSender.send(mime2);
+                    String ok2 = String.format("SystemEmail(HTML): sent via sales sender to=%s", toEmail);
+                    log.info(ok2);
+                    writeDebug(ok2, null);
+                    return;
+                } catch (Exception ex2) {
+                    String err2 = String.format("SystemEmail(HTML): fallback sales sender also failed for to=%s -> %s", toEmail, ex2.toString());
+                    log.error(err2, ex2);
+                    writeDebug(err2, ex2);
+                }
+            }
             throw new RuntimeException(ex);
         }
     }
